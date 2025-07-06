@@ -3,10 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '../global.css';
 import Toast from 'react-native-toast-message';
 import { useEffect } from 'react';
-import { usePathname } from 'expo-router';
+import { usePathname, Stack } from 'expo-router';
 import { useNotificationStore } from '../store/notificationStore';
-
-import { Stack } from 'expo-router';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,7 +31,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <KeyboardProvider>
         <RouteTracker />
-        <Stack>
+        <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="index" />
           <Stack.Screen name="details" />

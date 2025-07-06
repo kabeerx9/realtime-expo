@@ -6,7 +6,6 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { useUnreadCounts, useToast } from '../hooks/useNotifications';
 
 import { Button } from '~/components/Button';
-import { Container } from '~/components/Container';
 
 export default function Home() {
   const { isAuthenticated, user } = useAuthStore();
@@ -33,71 +32,63 @@ export default function Home() {
   if (!isAuthenticated) {
     return (
       <>
-        <Stack.Screen options={{ title: 'Welcome' }} />
-        <Container>
-          <View className="flex-1 items-center justify-center space-y-4">
-            <Text className="mb-8 text-2xl font-bold">Welcome!</Text>
+        <View className="flex-1 items-center justify-center space-y-4">
+          <Text className="mb-8 text-2xl font-bold">Welcome!</Text>
 
-            <Link href="/(auth)/login" asChild>
-              <Button title="Login" />
-            </Link>
+          <Link href="/(auth)/login" asChild>
+            <Button title="Login" />
+          </Link>
 
-            <Link href="/(auth)/signup" asChild>
-              <Button title="Sign Up" />
-            </Link>
-          </View>
-        </Container>
+          <Link href="/(auth)/signup" asChild>
+            <Button title="Sign Up" />
+          </Link>
+        </View>
       </>
     );
   }
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Home' }} />
-      <Container>
-        <View className="flex-1 items-center justify-center space-y-4">
-          <Text className="mb-4 text-2xl font-bold">Hello, {user?.firstName}!</Text>
-          <Text className="mb-8 text-gray-600">Welcome to your dashboard</Text>
+      <View className="flex-1 items-center justify-center space-y-4">
+        <Text className="mb-4 text-2xl font-bold">Hello, {user?.firstName}!</Text>
+        <Text className="mb-8 text-gray-600">Welcome to your dashboard</Text>
 
-          {/* Connection Status */}
-          <View className="mb-4 flex-row items-center">
-            <View
-              className={`mr-2 h-3 w-3 rounded-full ${isConnected ? 'bg-green-500' : isConnecting ? 'bg-yellow-500' : 'bg-red-500'}`}
-            />
-            <Text
-              className={`text-sm ${isConnected ? 'text-green-600' : isConnecting ? 'text-yellow-600' : 'text-red-600'}`}>
-              {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
-            </Text>
-          </View>
-
-          <Link href="/todos" asChild>
-            <Button title="My Todos" />
-          </Link>
-
-          <TouchableOpacity
-            onPress={() => router.push('/lobby')}
-            className="relative items-center rounded-[28px] bg-indigo-500 p-4 shadow-md">
-            <Text className="text-center text-lg font-semibold text-white">Join Lobby</Text>
-            {totalUnreadCount > 0 && (
-              <View className="absolute -right-2 -top-2 h-6 w-6 items-center justify-center rounded-full bg-red-500">
-                <Text className="text-xs font-bold text-white">
-                  {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <Link
-            href={{ pathname: '/details', params: { name: user?.firstName || 'User' } }}
-            asChild>
-            <Button title="Show Details" />
-          </Link>
-
-          <TouchableOpacity className="mt-4 rounded-lg bg-red-500 px-6 py-3" onPress={handleLogout}>
-            <Text className="font-semibold text-white">Logout</Text>
-          </TouchableOpacity>
+        {/* Connection Status */}
+        <View className="mb-4 flex-row items-center">
+          <View
+            className={`mr-2 h-3 w-3 rounded-full ${isConnected ? 'bg-green-500' : isConnecting ? 'bg-yellow-500' : 'bg-red-500'}`}
+          />
+          <Text
+            className={`text-sm ${isConnected ? 'text-green-600' : isConnecting ? 'text-yellow-600' : 'text-red-600'}`}>
+            {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
+          </Text>
         </View>
-      </Container>
+
+        <Link href="/todos" asChild>
+          <Button title="My Todos" />
+        </Link>
+
+        <TouchableOpacity
+          onPress={() => router.push('/lobby')}
+          className="relative items-center rounded-[28px] bg-indigo-500 p-4 shadow-md">
+          <Text className="text-center text-lg font-semibold text-white">Join Lobby</Text>
+          {totalUnreadCount > 0 && (
+            <View className="absolute -right-2 -top-2 h-6 w-6 items-center justify-center rounded-full bg-red-500">
+              <Text className="text-xs font-bold text-white">
+                {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <Link href={{ pathname: '/details', params: { name: user?.firstName || 'User' } }} asChild>
+          <Button title="Show Details" />
+        </Link>
+
+        <TouchableOpacity className="mt-4 rounded-lg bg-red-500 px-6 py-3" onPress={handleLogout}>
+          <Text className="font-semibold text-white">Logout</Text>
+        </TouchableOpacity>
+      </View>
     </>
   );
 }

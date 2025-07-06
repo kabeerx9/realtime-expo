@@ -9,7 +9,6 @@ import {
   RefreshControl,
   TextInput,
   ActivityIndicator,
-  SafeAreaView,
 } from 'react-native';
 import {
   useTodos,
