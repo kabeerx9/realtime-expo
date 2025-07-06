@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Platform } from 'react-native';
 
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -100,103 +100,129 @@ export default function Lobby() {
   }, []);
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      {/* Connection Status */}
-      <View className="mb-4 flex-row items-center">
-        <View
-          className={`mr-2 h-3 w-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
-        />
-        <Text className={`text-sm ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
-          {isConnected ? 'Connected' : 'Disconnected'}
-        </Text>
-        {(connectionError || chatError) && (
-          <TouchableOpacity
-            onPress={handleClearError}
-            className="ml-2 rounded bg-red-100 px-2 py-1">
-            <Text className="text-xs text-red-600">Clear Error</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Messages */}
-      <KeyboardAwareScrollView
-        ref={scrollViewRef}
-        className="mb-4 flex-1 rounded-lg bg-gray-50 p-3"
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'space-between' }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled">
-        {messages.length === 0 ? (
-          <Text className="mt-4 text-center text-gray-500">
-            No messages yet. Start the conversation!
-          </Text>
-        ) : (
-          messages.map((message) => {
-            const isMine = isMyMessage(message);
-            return (
-              <View key={message.id} className={`mb-4 ${isMine ? 'items-end' : 'items-start'}`}>
-                <View
-                  className={`max-w-[75%] rounded-2xl px-4 py-2 ${
-                    isMine
-                      ? 'rounded-tr-sm bg-blue-500'
-                      : 'rounded-tl-sm border border-gray-200 bg-white'
-                  }`}>
-                  {!isMine && (
-                    <Text className="mb-1 text-xs font-semibold text-blue-600">{message.user}</Text>
-                  )}
-                  <Text className={`${isMine ? 'text-white' : 'text-gray-800'}`}>
-                    {message.text}
-                  </Text>
-                </View>
-                <Text
-                  className={`mt-1 text-xs text-gray-500 ${isMine ? 'text-right' : 'text-left'}`}>
-                  {new Date(message.timestamp).toLocaleTimeString()}
-                </Text>
-              </View>
-            );
-          })
-        )}
-
-        {/* Typing Indicator */}
-        {typingUsers.length > 0 && (
-          <View className="mb-2 px-3">
-            <Text className="text-sm text-gray-500">
-              {typingUsers.length === 1
-                ? `${typingUsers[0]} is typing...`
-                : typingUsers.length === 2
-                  ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
-                  : `${typingUsers[0]} and ${typingUsers.length - 1} others are typing...`}
+    <SafeAreaView className="flex-1 bg-white">
+      <View className="flex-1 px-4 pt-2">
+        {/* Connection Status */}
+        <View className="mb-3 flex-row items-center justify-between">
+          <View className="flex-row items-center">
+            <View
+              className={`mr-2 h-3 w-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}
+            />
+            <Text
+              className={`text-sm font-medium ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
+              {isConnected ? 'Connected' : 'Disconnected'}
             </Text>
           </View>
-        )}
-
-        {/* Message Input */}
-        <View className="mb-10 flex-row items-center space-x-2">
-          <TextInput
-            value={newMessage}
-            onChangeText={handleTextChange}
-            placeholder="Type your message..."
-            className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3"
-            multiline
-            maxLength={500}
-            onSubmitEditing={handleSendMessage}
-            returnKeyType="send"
-            editable={isConnected}
-          />
-          <TouchableOpacity
-            onPress={handleSendMessage}
-            disabled={!canSendMessage(newMessage.trim())}
-            className={`rounded-lg px-4 py-3 ${
-              canSendMessage(newMessage.trim()) ? 'bg-blue-500' : 'bg-gray-300'
-            }`}>
-            <Text
-              className={`font-semibold ${
-                canSendMessage(newMessage.trim()) ? 'text-white' : 'text-gray-500'
-              }`}>
-              Send
-            </Text>
-          </TouchableOpacity>
+          {(connectionError || chatError) && (
+            <TouchableOpacity
+              onPress={handleClearError}
+              className="rounded-md bg-red-100 px-3 py-1">
+              <Text className="text-xs font-medium text-red-600">Clear Error</Text>
+            </TouchableOpacity>
+          )}
         </View>
-      </KeyboardAwareScrollView>
+
+        {/* Messages Container */}
+        <View className="flex-1 rounded-lg border border-gray-200 bg-gray-50">
+          <KeyboardAwareScrollView
+            ref={scrollViewRef}
+            className="flex-1 p-4"
+            contentContainerStyle={{ flexGrow: 1 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled">
+            {messages.length === 0 ? (
+              <View className="flex-1 items-center justify-center">
+                <Text className="text-center text-base text-gray-500">
+                  No messages yet. Start the conversation!
+                </Text>
+              </View>
+            ) : (
+              <View className="flex-1">
+                {messages.map((message) => {
+                  const isMine = isMyMessage(message);
+                  return (
+                    <View
+                      key={message.id}
+                      className={`mb-4 ${isMine ? 'items-end' : 'items-start'}`}>
+                      <View
+                        className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                          isMine
+                            ? 'rounded-tr-md bg-blue-500'
+                            : 'rounded-tl-md border border-gray-200 bg-white'
+                        }`}>
+                        {!isMine && (
+                          <Text className="mb-1 text-xs font-semibold text-blue-600">
+                            {message.user}
+                          </Text>
+                        )}
+                        <Text className={`text-base ${isMine ? 'text-white' : 'text-gray-800'}`}>
+                          {message.text}
+                        </Text>
+                      </View>
+                      <Text
+                        className={`mt-1 text-xs text-gray-500 ${isMine ? 'text-right' : 'text-left'}`}>
+                        {new Date(message.timestamp).toLocaleTimeString()}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Typing Indicator */}
+            {typingUsers.length > 0 && (
+              <View className="mx-[-16px] mb-3 border-t border-gray-200 bg-gray-50 px-4 py-2">
+                <Text className="text-sm text-gray-500">
+                  {typingUsers.length === 1
+                    ? `${typingUsers[0]} is typing...`
+                    : typingUsers.length === 2
+                      ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
+                      : `${typingUsers[0]} and ${typingUsers.length - 1} others are typing...`}
+                </Text>
+              </View>
+            )}
+
+            {/* Message Input */}
+            <View className="mb-10 mt-auto pt-3">
+              <View className="flex-row items-end space-x-3">
+                <View className="flex-1">
+                  <TextInput
+                    value={newMessage}
+                    onChangeText={handleTextChange}
+                    placeholder="Type your message..."
+                    className={`flex-1 rounded-2xl border border-gray-300 bg-white px-4 py-3 text-base ${
+                      Platform.OS === 'ios' ? 'min-h-[44px]' : 'min-h-[48px]'
+                    } ${!isConnected ? 'bg-gray-100' : ''}`}
+                    multiline
+                    maxLength={500}
+                    onSubmitEditing={handleSendMessage}
+                    returnKeyType="send"
+                    editable={isConnected}
+                    textAlignVertical="top"
+                    style={{
+                      maxHeight: 120,
+                      ...(Platform.OS === 'android' && { textAlignVertical: 'top' }),
+                    }}
+                  />
+                </View>
+                <TouchableOpacity
+                  onPress={handleSendMessage}
+                  disabled={!canSendMessage(newMessage.trim())}
+                  className={`rounded-2xl px-6 py-3 ${
+                    canSendMessage(newMessage.trim()) ? 'bg-blue-500' : 'bg-gray-300'
+                  } ${Platform.OS === 'ios' ? 'min-h-[44px]' : 'min-h-[48px]'} items-center justify-center`}>
+                  <Text
+                    className={`text-base font-semibold ${
+                      canSendMessage(newMessage.trim()) ? 'text-white' : 'text-gray-500'
+                    }`}>
+                    Send
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAwareScrollView>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
