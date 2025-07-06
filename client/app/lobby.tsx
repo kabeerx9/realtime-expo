@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
-import { Stack } from 'expo-router';
-import { Container } from '~/components/Container';
+
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useChat } from '../hooks/useChat';
 import { useNotifications } from '../hooks/useNotifications';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Lobby() {
   const [newMessage, setNewMessage] = useState('');
@@ -100,7 +100,7 @@ export default function Lobby() {
   }, []);
 
   return (
-    <>
+    <SafeAreaView style={{ flex: 1 }}>
       {/* Connection Status */}
       <View className="mb-4 flex-row items-center">
         <View
@@ -122,6 +122,7 @@ export default function Lobby() {
       <KeyboardAwareScrollView
         ref={scrollViewRef}
         className="mb-4 flex-1 rounded-lg bg-gray-50 p-3"
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'space-between' }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
         {messages.length === 0 ? (
@@ -196,6 +197,6 @@ export default function Lobby() {
           </TouchableOpacity>
         </View>
       </KeyboardAwareScrollView>
-    </>
+    </SafeAreaView>
   );
 }

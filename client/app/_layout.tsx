@@ -5,6 +5,7 @@ import Toast from 'react-native-toast-message';
 import { useEffect } from 'react';
 import { usePathname, Stack } from 'expo-router';
 import { useNotificationStore } from '../store/notificationStore';
+import { Platform } from 'react-native';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,9 +32,19 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <KeyboardProvider>
         <RouteTracker />
-        <Stack screenOptions={{ headerShown: false }}>
+        <Stack
+          screenOptions={{
+            headerStyle: {
+              backgroundColor: '#ffffff',
+            },
+            headerTitleStyle: {
+              fontSize: 18,
+              fontWeight: '600',
+            },
+            headerShadowVisible: false,
+          }}>
           <Stack.Screen name="(auth)" />
-          <Stack.Screen name="index" />
+          <Stack.Screen name="index" options={{ headerTitle: 'Welcome' }} />
           <Stack.Screen name="details" />
           <Stack.Screen name="todos" />
           <Stack.Screen name="lobby" />

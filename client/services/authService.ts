@@ -7,9 +7,46 @@ import { useAuthStore } from '../store/authStore';
 // Find your IP: Run `ipconfig getifaddr en0` on Mac or `ipconfig` on Windows
 const API_BASE_URL = 'http://192.168.186.73:3000/api'; // Replace with your machine's IP
 
-// Extend the axios config type to include retry flag
-interface ExtendedAxiosRequestConfig extends InternalAxiosRequestConfig {
-  _retry?: boolean;
+// Simple axios instance for unauthenticated requests
+const authAxios = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  },
+});
+
+// Add retry logic to the unauthenticated client
+axiosRetry(authAxios, {
+  retries: 3,
+  retryDelay: (retryCount) => retryCount * 1000,
+  retryCondition: (error: AxiosError) =>
+    axiosRetry.isNetworkError(error) ||
+    axiosRetry.isRetryableError(error) ||
+    (error.response?.status ? error.response.status >= 500 : false),
+});
+
+// Token refresh function (standalone to avoid circular reference)
+async function refreshAccessToken(): Promise<string> {
+  const { refreshToken, setTokens } = useAuthStore.getState();
+
+  if (!refreshToken) {
+    throw new Error('No refresh token available');
+  }
+
+  const response = await authAxios.post('/auth/refresh-token', {
+    refreshToken,
+  });
+
+  const responseData = response.data;
+  if (responseData.success) {
+    const { accessToken, refreshToken: newRefreshToken } = responseData.data;
+    setTokens(accessToken, newRefreshToken);
+    return accessToken;
+  } else {
+    throw new Error(responseData.message || 'Token refresh failed');
+  }
 }
 
 // Authenticated API client for protected routes
@@ -47,48 +84,20 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as ExtendedAxiosRequestConfig;
-
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-      originalRequest._retry = true;
-
+    if (error.response?.status === 401) {
       try {
-        const refreshed = await authService.refreshAccessToken();
-        if (refreshed && originalRequest.headers) {
-          const { accessToken } = useAuthStore.getState();
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          return apiClient(originalRequest as InternalAxiosRequestConfig);
+        const newToken = await refreshAccessToken();
+        if (error.config && newToken) {
+          error.config.headers.Authorization = `Bearer ${newToken}`;
+          return apiClient.request(error.config);
         }
       } catch (refreshError) {
-        // Refresh failed, sign out user
-        authService.signOut(); // Use the service's signOut
-        return Promise.reject(refreshError);
+        useAuthStore.getState().signOut();
       }
     }
-
     return Promise.reject(error);
   }
 );
-
-// Simple axios instance for unauthenticated requests
-const authAxios = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  },
-});
-
-// Add retry logic to the unauthenticated client as well
-axiosRetry(authAxios, {
-  retries: 3,
-  retryDelay: (retryCount) => retryCount * 1000,
-  retryCondition: (error: AxiosError) =>
-    axiosRetry.isNetworkError(error) ||
-    axiosRetry.isRetryableError(error) ||
-    (error.response?.status ? error.response.status >= 500 : false),
-});
 
 // Export the authenticated API client for reuse
 export { apiClient };
