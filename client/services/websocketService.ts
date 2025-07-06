@@ -83,6 +83,16 @@ class WebSocketService {
       connectionStore.setConnectionError(error.message || 'Unknown error');
       chatStore.setChatError(error.message || 'Chat error occurred');
     });
+
+    this.socket.on('user_typing', (data: { user: string }) => {
+      console.log(`${data.user} is typing`);
+      chatStore.addTypingUser(data.user);
+    });
+
+    this.socket.on('user_stopped_typing', (data: { user: string }) => {
+      console.log(`${data.user} stopped typing`);
+      chatStore.removeTypingUser(data.user);
+    });
   }
 
   disconnect() {
@@ -120,6 +130,28 @@ class WebSocketService {
 
     // Send to server - server will broadcast to all clients including sender
     this.socket.emit('message', message);
+  }
+
+  sendTyping(user: string) {
+    const connectionStore = useConnectionStore.getState();
+
+    if (!this.socket || !connectionStore.isConnected) {
+      console.warn('Cannot send typing: WebSocket not connected');
+      return;
+    }
+
+    this.socket.emit('user_typing', { user });
+  }
+
+  sendStoppedTyping(user: string) {
+    const connectionStore = useConnectionStore.getState();
+
+    if (!this.socket || !connectionStore.isConnected) {
+      console.warn('Cannot send stopped typing: WebSocket not connected');
+      return;
+    }
+
+    this.socket.emit('user_stopped_typing', { user });
   }
 
   // Reconnection logic

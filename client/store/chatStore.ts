@@ -24,6 +24,9 @@ export interface ChatState {
   // Error state
   chatError: string | null;
 
+  // Typing indicators
+  typingUsers: string[];
+
   // Actions
   addMessage: (message: Message) => void;
 
@@ -36,6 +39,11 @@ export interface ChatState {
   // Error handling
   setChatError: (error: string | null) => void;
   clearChat: () => void;
+
+  // Typing indicators
+  addTypingUser: (user: string) => void;
+  removeTypingUser: (user: string) => void;
+  clearTypingUsers: () => void;
 
   // Utilities
   getMessagesByUser: (user: string) => Message[];
@@ -53,6 +61,7 @@ export const useChatStore = create<ChatState>()(
       isLoadingHistory: false,
       hasMoreHistory: true,
       chatError: null,
+      typingUsers: [],
 
       // Message actions
       addMessage: (message) => {
@@ -102,7 +111,28 @@ export const useChatStore = create<ChatState>()(
           isLoadingHistory: false,
           hasMoreHistory: true,
           chatError: null,
+          typingUsers: [],
         });
+      },
+
+      // Typing indicators
+      addTypingUser: (user) => {
+        set((state) => {
+          if (state.typingUsers.includes(user)) {
+            return state; // User already typing
+          }
+          return { typingUsers: [...state.typingUsers, user] };
+        });
+      },
+
+      removeTypingUser: (user) => {
+        set((state) => ({
+          typingUsers: state.typingUsers.filter((u) => u !== user),
+        }));
+      },
+
+      clearTypingUsers: () => {
+        set({ typingUsers: [] });
       },
 
       // Utilities

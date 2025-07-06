@@ -163,6 +163,19 @@ export const Main = async () => {
       io.emit("message", message);
     });
 
+    // Handle typing indicators
+    socket.on("user_typing", (data: { user: string }) => {
+      logging.info(`${data.user} is typing`);
+      // Broadcast to all other clients (not the sender)
+      socket.broadcast.emit("user_typing", data);
+    });
+
+    socket.on("user_stopped_typing", (data: { user: string }) => {
+      logging.info(`${data.user} stopped typing`);
+      // Broadcast to all other clients (not the sender)
+      socket.broadcast.emit("user_stopped_typing", data);
+    });
+
     socket.on("disconnect", () => {
       logging.info(`User disconnected: ${socket.id}`);
     });

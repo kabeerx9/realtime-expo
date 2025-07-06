@@ -22,10 +22,15 @@ export interface UseChatReturn {
   // Connection state
   isConnected: boolean;
 
+  // Typing indicators
+  typingUsers: string[];
+
   // Actions
   sendMessage: (text: string) => void;
   clearError: () => void;
   loadMoreHistory: () => void;
+  startTyping: () => void;
+  stopTyping: () => void;
 
   // Utilities
   isMyMessage: (message: Message) => boolean;
@@ -44,6 +49,7 @@ export const useChat = (options: UseChatOptions = {}): UseChatReturn => {
     isLoadingHistory,
     hasMoreHistory,
     chatError,
+    typingUsers,
     setChatError,
     getMessagesByUser,
     getRecentMessages,
@@ -132,6 +138,17 @@ export const useChat = (options: UseChatOptions = {}): UseChatReturn => {
     return getTotalMessageCount();
   }, [getTotalMessageCount]);
 
+  // Typing functions
+  const startTyping = useCallback(() => {
+    if (!user) return;
+    websocketService.sendTyping(user.firstName);
+  }, [user]);
+
+  const stopTyping = useCallback(() => {
+    if (!user) return;
+    websocketService.sendStoppedTyping(user.firstName);
+  }, [user]);
+
   return {
     // Messages
     messages,
@@ -146,10 +163,15 @@ export const useChat = (options: UseChatOptions = {}): UseChatReturn => {
     // Connection state
     isConnected,
 
+    // Typing indicators
+    typingUsers,
+
     // Actions
     sendMessage,
     clearError,
     loadMoreHistory,
+    startTyping,
+    stopTyping,
 
     // Utilities
     isMyMessage,

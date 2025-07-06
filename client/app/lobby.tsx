@@ -10,10 +10,21 @@ import { useNotifications } from '../hooks/useNotifications';
 export default function Lobby() {
   const [newMessage, setNewMessage] = useState('');
   const scrollViewRef = useRef<any>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Use the new hooks
   const { isConnected, connectionError } = useWebSocket();
-  const { messages, chatError, sendMessage, isMyMessage, clearError, canSendMessage } = useChat();
+  const {
+    messages,
+    chatError,
+    sendMessage,
+    isMyMessage,
+    clearError,
+    canSendMessage,
+    typingUsers,
+    startTyping,
+    stopTyping,
+  } = useChat();
   const { showToast } = useNotifications();
 
   useEffect(() => {
@@ -40,12 +51,53 @@ export default function Lobby() {
     if (newMessage.trim() && canSendMessage(newMessage.trim())) {
       sendMessage(newMessage.trim());
       setNewMessage('');
+
+      // Stop typing when message is sent
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      stopTyping();
     }
   };
 
   const handleClearError = () => {
     clearError();
   };
+
+  const handleTextChange = (text: string) => {
+    setNewMessage(text);
+
+    // Handle typing indicators
+    if (text.trim() && isConnected) {
+      // Start typing
+      startTyping();
+
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      // Set timeout to stop typing after 2 seconds of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        stopTyping();
+      }, 2000);
+    } else if (!text.trim()) {
+      // Stop typing if input is empty
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      stopTyping();
+    }
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <>
@@ -109,11 +161,24 @@ export default function Lobby() {
             )}
           </KeyboardAwareScrollView>
 
+          {/* Typing Indicator */}
+          {typingUsers.length > 0 && (
+            <View className="mb-2 px-3">
+              <Text className="text-sm text-gray-500">
+                {typingUsers.length === 1
+                  ? `${typingUsers[0]} is typing...`
+                  : typingUsers.length === 2
+                    ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
+                    : `${typingUsers[0]} and ${typingUsers.length - 1} others are typing...`}
+              </Text>
+            </View>
+          )}
+
           {/* Message Input */}
           <View className="flex-row items-center space-x-2">
             <TextInput
               value={newMessage}
-              onChangeText={setNewMessage}
+              onChangeText={handleTextChange}
               placeholder="Type your message..."
               className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3"
               multiline
