@@ -21,6 +21,7 @@ import { AuthenticatedUser } from "./types/auth";
 import { RequestWithUser } from "./types/request";
 import routes from "./routes";
 import { Server } from "socket.io";
+import gameService from "./gameService";
 
 export const app = express();
 export let httpServer: ReturnType<typeof http.createServer>;
@@ -176,10 +177,130 @@ export const Main = async () => {
       socket.broadcast.emit("user_stopped_typing", data);
     });
 
+    // ===== FANTASY GAME HANDLERS =====
+
+    // Create a new game room
+    socket.on("create_room", () => {
+      try {
+        const result = gameService.createRoom(socket.id);
+        socket.emit("room_created", {
+          success: true,
+          roomId: result.roomId,
+          players: result.players,
+          message: "Room created! Waiting for another player..."
+        });
+        logging.info(`Room ${result.roomId} created by ${socket.id}`);
+      } catch (error) {
+        socket.emit("room_error", { success: false, error: "Failed to create room" });
+      }
+    });
+
+    // Join a game room (auto-find available room or join specific room)
+    socket.on("join_room", (data: { roomId?: string } = {}) => {
+      try {
+        const result = gameService.joinRoom(socket.id, data.roomId);
+
+        if (result.success) {
+          socket.emit("room_joined", {
+            success: true,
+            roomId: result.roomId,
+            players: result.players,
+            message: "Joined room successfully!"
+          });
+
+          // Get room data to check if game should start
+          const roomData = gameService.getRoomData(socket.id);
+          if (roomData && roomData.players.length === 2 && roomData.gameStarted) {
+            // Notify both players that game is starting
+            roomData.players.forEach(playerId => {
+              io.to(playerId).emit("game_started", {
+                roomId: roomData.id,
+                playerCount: roomData.players.length,
+                message: "Game starting! Events will begin shortly..."
+              });
+            });
+
+            // Start sending events
+            startGameEventLoop(result.roomId!);
+          }
+
+          logging.info(`Player ${socket.id} joined room ${result.roomId}`);
+        } else {
+          socket.emit("room_error", {
+            success: false,
+            error: result.error || "Failed to join room"
+          });
+        }
+      } catch (error) {
+        socket.emit("room_error", { success: false, error: "Failed to join room" });
+      }
+    });
+
+    // Get current room status
+    socket.on("get_room_status", () => {
+      const roomData = gameService.getRoomData(socket.id);
+      if (roomData) {
+        socket.emit("room_status", {
+          roomId: roomData.id,
+          playerCount: roomData.players.length,
+          gameStarted: roomData.gameStarted,
+          gameEnded: roomData.gameEnded,
+          currentScore: roomData.scores[socket.id] || 0,
+          events: roomData.events
+        });
+      } else {
+        socket.emit("room_status", { error: "Not in any room" });
+      }
+    });
+
     socket.on("disconnect", () => {
       logging.info(`User disconnected: ${socket.id}`);
+
+      // Handle game room cleanup
+      gameService.leaveRoom(socket.id);
     });
   });
+
+  // Game event loop function
+  function startGameEventLoop(roomId: string) {
+    const eventInterval = setInterval(() => {
+      const roomData = gameService.getAllRooms().find(room => room.id === roomId);
+
+      if (!roomData || roomData.gameEnded) {
+        clearInterval(eventInterval);
+        return;
+      }
+
+      // Get latest room data and broadcast current state to all players
+      roomData.players.forEach(playerId => {
+        const currentRoomData = gameService.getRoomData(playerId);
+        if (currentRoomData) {
+          io.to(playerId).emit("game_event", {
+            event: currentRoomData.events[currentRoomData.events.length - 1],
+            currentScore: currentRoomData.scores[playerId],
+            allScores: currentRoomData.scores,
+            gameEnded: currentRoomData.gameEnded
+          });
+
+          // If game ended, send final results
+          if (currentRoomData.gameEnded) {
+            io.to(playerId).emit("game_ended", {
+              finalScores: currentRoomData.scores,
+              allEvents: currentRoomData.events,
+              winner: Object.entries(currentRoomData.scores).reduce((a, b) =>
+                currentRoomData.scores[a[0]] > currentRoomData.scores[b[0]] ? a : b
+              )[0],
+              message: "Game completed!"
+            });
+          }
+        }
+      });
+
+      if (roomData.gameEnded) {
+        clearInterval(eventInterval);
+      }
+    }, 100); // Check every 100ms for new events
+  }
 
   httpServer.listen(environment.port, () => {
     logging.info(
