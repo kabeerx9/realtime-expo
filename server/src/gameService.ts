@@ -135,13 +135,13 @@ class GameService {
     return { success: true, roomId, players: assignedPlayers };
   }
 
-  private findAvailableRoom(): string | null {
+  private findAvailableRoom(): string | undefined {
     for (const [roomId, room] of this.rooms) {
       if (room.players.length === 1 && !room.gameStarted) {
         return roomId;
       }
     }
-    return null;
+    return undefined;
   }
 
   private startGame(roomId: string): void {
@@ -171,7 +171,7 @@ class GameService {
     }, 60000);
   }
 
-  private generateRandomEvent(roomId: string): void {
+    private generateRandomEvent(roomId: string): void {
     const room = this.rooms.get(roomId);
     if (!room || room.gameEnded) return;
 
@@ -201,6 +201,29 @@ class GameService {
 
     room.events.push(gameEvent);
     console.log(`Event in room ${roomId}: ${randomPlayer.name} ${eventTemplate.action} (${pointsChange > 0 ? '+' : ''}${pointsChange})`);
+
+    // Emit event immediately to all players in the room
+    this.emitEventToRoom(roomId, gameEvent);
+  }
+
+  private emitEventToRoom(roomId: string, gameEvent: GameEvent): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+
+    // Import io here to avoid circular dependency
+    const { io } = require('./app');
+
+    room.players.forEach(socketId => {
+      const opponentId = room.players.find(id => id !== socketId);
+      io.to(socketId).emit("game_event", {
+        event: gameEvent,
+        currentScore: room.scores[socketId] || 0,
+        opponentScore: opponentId ? (room.scores[opponentId] || 0) : 0,
+        allScores: room.scores,
+        gameEnded: room.gameEnded,
+        isMyPlayer: room.playerAssignments[socketId].some(p => p.id === gameEvent.playerId)
+      });
+    });
   }
 
   private endGame(roomId: string): void {
@@ -221,6 +244,35 @@ class GameService {
 
     console.log(`Game ended in room ${roomId}`);
     console.log('Final scores:', room.scores);
+
+    // Broadcast game end to all players
+    this.broadcastGameEnd(roomId);
+  }
+
+  private broadcastGameEnd(roomId: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+
+    // Import io here to avoid circular dependency
+    const { io } = require('./app');
+
+    // Find winner
+    const winner = Object.entries(room.scores).reduce((a, b) =>
+      room.scores[a[0]] > room.scores[b[0]] ? a : b
+    );
+
+    room.players.forEach(socketId => {
+      const opponentId = room.players.find(id => id !== socketId);
+      io.to(socketId).emit("game_ended", {
+        finalScores: room.scores,
+        allEvents: room.events,
+        winner: winner[0],
+        isWinner: winner[0] === socketId,
+        yourScore: room.scores[socketId] || 0,
+        opponentScore: opponentId ? (room.scores[opponentId] || 0) : 0,
+        message: "Game completed!"
+      });
+    });
   }
 
   leaveRoom(socketId: string): void {

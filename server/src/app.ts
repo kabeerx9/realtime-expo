@@ -208,7 +208,7 @@ export const Main = async () => {
             message: "Joined room successfully!"
           });
 
-          // Get room data to check if game should start
+                     // Get room data to check if game should start
           const roomData = gameService.getRoomData(socket.id);
           if (roomData && roomData.players.length === 2 && roomData.gameStarted) {
             // Notify both players that game is starting
@@ -219,9 +219,6 @@ export const Main = async () => {
                 message: "Game starting! Events will begin shortly..."
               });
             });
-
-            // Start sending events
-            startGameEventLoop(result.roomId!);
           }
 
           logging.info(`Player ${socket.id} joined room ${result.roomId}`);
@@ -259,48 +256,7 @@ export const Main = async () => {
       // Handle game room cleanup
       gameService.leaveRoom(socket.id);
     });
-  });
-
-  // Game event loop function
-  function startGameEventLoop(roomId: string) {
-    const eventInterval = setInterval(() => {
-      const roomData = gameService.getAllRooms().find(room => room.id === roomId);
-
-      if (!roomData || roomData.gameEnded) {
-        clearInterval(eventInterval);
-        return;
-      }
-
-      // Get latest room data and broadcast current state to all players
-      roomData.players.forEach(playerId => {
-        const currentRoomData = gameService.getRoomData(playerId);
-        if (currentRoomData) {
-          io.to(playerId).emit("game_event", {
-            event: currentRoomData.events[currentRoomData.events.length - 1],
-            currentScore: currentRoomData.scores[playerId],
-            allScores: currentRoomData.scores,
-            gameEnded: currentRoomData.gameEnded
-          });
-
-          // If game ended, send final results
-          if (currentRoomData.gameEnded) {
-            io.to(playerId).emit("game_ended", {
-              finalScores: currentRoomData.scores,
-              allEvents: currentRoomData.events,
-              winner: Object.entries(currentRoomData.scores).reduce((a, b) =>
-                currentRoomData.scores[a[0]] > currentRoomData.scores[b[0]] ? a : b
-              )[0],
-              message: "Game completed!"
-            });
-          }
-        }
-      });
-
-      if (roomData.gameEnded) {
-        clearInterval(eventInterval);
-      }
-    }, 100); // Check every 100ms for new events
-  }
+    });
 
   httpServer.listen(environment.port, () => {
     logging.info(
