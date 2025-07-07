@@ -14,7 +14,8 @@ export default function Home() {
   // Use the new hooks
   const { isConnected, isConnecting, disconnect } = useWebSocket({
     autoConnect: true,
-    serverUrl: 'http://192.168.186.73:3000/',
+    // serverUrl: 'http://192.168.186.73:3000/',
+    serverUrl: 'http://localhost:3000/',
   });
   const { totalUnreadCount } = useUnreadCounts();
   const { showToast } = useToast();
