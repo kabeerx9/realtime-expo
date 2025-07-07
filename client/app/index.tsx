@@ -4,8 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { authService } from '../services/authService';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useUnreadCounts, useToast } from '../hooks/useNotifications';
-
-import { Button } from '~/components/Button';
+import Rooms from '~/components/rooms/Rooms';
 
 export default function Home() {
   const { isAuthenticated, user } = useAuthStore();
@@ -70,7 +69,7 @@ export default function Home() {
 
   return (
     <ScrollView className="flex-1 bg-gray-50">
-      <View className="flex-1 px-6 pt-12">
+      <View className="flex flex-col gap-4 px-6 pt-12">
         {/* Header Section */}
         <View className="mb-8">
           <View className="flex-row items-center justify-between">
@@ -170,6 +169,7 @@ export default function Home() {
             <Text className="text-center text-lg font-semibold text-red-600">Sign Out</Text>
           </TouchableOpacity>
         </View>
+        <Rooms />
       </View>
     </ScrollView>
   );

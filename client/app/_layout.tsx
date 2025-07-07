@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { usePathname, Stack } from 'expo-router';
 import { useNotificationStore } from '../store/notificationStore';
 import { Platform } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,28 +30,30 @@ function RouteTracker() {
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <KeyboardProvider>
-        <RouteTracker />
-        <Stack
-          screenOptions={{
-            headerStyle: {
-              backgroundColor: '#ffffff',
-            },
-            headerTitleStyle: {
-              fontSize: 18,
-              fontWeight: '600',
-            },
-            headerShadowVisible: false,
-          }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="index" options={{ headerTitle: 'Welcome' }} />
-          <Stack.Screen name="details" />
-          <Stack.Screen name="todos" />
-          <Stack.Screen name="lobby" />
-        </Stack>
-        <Toast />
-      </KeyboardProvider>
-    </QueryClientProvider>
+    <GestureHandlerRootView>
+      <QueryClientProvider client={queryClient}>
+        <KeyboardProvider>
+          <RouteTracker />
+          <Stack
+            screenOptions={{
+              headerStyle: {
+                backgroundColor: '#ffffff',
+              },
+              headerTitleStyle: {
+                fontSize: 18,
+                fontWeight: '600',
+              },
+              headerShadowVisible: false,
+            }}>
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="index" options={{ headerTitle: 'Welcome' }} />
+            <Stack.Screen name="details" />
+            <Stack.Screen name="todos" />
+            <Stack.Screen name="lobby" />
+          </Stack>
+          <Toast />
+        </KeyboardProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }
