@@ -208,7 +208,7 @@ export const Main = async () => {
             message: "Joined room successfully!"
           });
 
-                     // Get room data to check if game should start
+            // Get room data to check if game should start
           const roomData = gameService.getRoomData(socket.id);
           if (roomData && roomData.players.length === 2 && roomData.gameStarted) {
             // Notify both players that game is starting

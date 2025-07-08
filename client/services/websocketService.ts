@@ -93,8 +93,50 @@ class WebSocketService {
       console.log(`${data.user} stopped typing`);
       chatStore.removeTypingUser(data.user);
     });
+
+    // ----------- ROOM RELATED EVENTS ------------
+
+    this.socket.on('room_created', (data) => {
+      console.log('room details ', data);
+    });
+
+    this.socket.on('room_joined', (data) => {
+      console.log('room details ', data);
+    });
+
+    this.socket.on('room_status', (data) => {
+      console.log('room status ', data);
+    });
+
+    // ----------- GAME RELATED EVENTS ------------
   }
 
+  // ------ METHODS FOR ROOM RELATED EVENTS ----------
+
+  createRoom() {
+    if (this.socket && this.getIsConnected()) {
+      this.socket.emit('create_room');
+    }
+  }
+
+  joinRoom(roomId: string) {
+    if (this.socket && this.getIsConnected()) {
+      this.socket.emit('join_room', { roomId });
+    }
+  }
+
+  // for a player to get the status of the room he is in
+  getRoomStatus() {
+    if (this.socket && this.getIsConnected()) {
+      this.socket.emit('get_room_status');
+    }
+  }
+
+  leaveRoom() {
+    if (this.socket && this.getIsConnected()) {
+      this.socket.emit('leave_room');
+    }
+  }
   disconnect() {
     if (this.socket) {
       this.socket.disconnect();
