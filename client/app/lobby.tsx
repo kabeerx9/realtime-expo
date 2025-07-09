@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Platform, FlatList } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform } from 'react-native';
 
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useChat } from '../hooks/useChat';
@@ -7,15 +7,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Lobby() {
   const [newMessage, setNewMessage] = useState('');
-  const flatListRef = useRef<FlatList>(null);
+  // The ref now points to the KeyboardAwareScrollView
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Use our new, simplified hook
   const { messages, isConnected, sendMessage, isMyMessage } = useChat();
 
   // Auto scroll to bottom when new messages arrive
   useEffect(() => {
-    if (flatListRef.current && messages.length > 0) {
-      flatListRef.current.scrollToEnd({ animated: true });
+    if (scrollViewRef.current && messages.length > 0) {
+      // Use a short timeout to ensure the UI has updated before scrolling
+      setTimeout(() => scrollViewRef.current?.scrollToEnd(), 100);
     }
   }, [messages]);
 
@@ -42,27 +44,23 @@ export default function Lobby() {
           </Text>
         </View>
 
-        {/* Messages Container */}
-        <KeyboardAwareScrollView
-          className="flex-1"
-          contentContainerStyle={{ flexGrow: 1 }}
-          keyboardShouldPersistTaps="handled">
-          <View className="flex-1">
-            <FlatList
-              ref={flatListRef}
-              data={messages}
-              keyExtractor={(item) => item.id}
-              ListEmptyComponent={
-                <View className="flex-1 items-center justify-center">
-                  <Text className="text-center text-base text-gray-500">
-                    No messages yet. Start the conversation!
-                  </Text>
-                </View>
-              }
-              renderItem={({ item: message }) => {
+        <View className="flex-1 rounded-lg border border-gray-200 bg-gray-50">
+          <KeyboardAwareScrollView
+            ref={scrollViewRef}
+            className="flex-1 p-4"
+            keyboardShouldPersistTaps="handled">
+            {/* Message list rendered with map */}
+            {messages.length === 0 ? (
+              <View className="flex-1 items-center justify-center">
+                <Text className="text-center text-base text-gray-500">
+                  No messages yet. Start the conversation!
+                </Text>
+              </View>
+            ) : (
+              messages.map((message) => {
                 const isMine = isMyMessage(message);
                 return (
-                  <View className={`mb-4 ${isMine ? 'items-end' : 'items-start'}`}>
+                  <View key={message.id} className={`mb-4 ${isMine ? 'items-end' : 'items-start'}`}>
                     <View
                       className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                         isMine
@@ -84,39 +82,37 @@ export default function Lobby() {
                     </Text>
                   </View>
                 );
-              }}
-              className="flex-1 rounded-lg border border-gray-200 bg-gray-50 p-4"
-              contentContainerStyle={{ flexGrow: 1 }}
-            />
-          </View>
+              })
+            )}
+          </KeyboardAwareScrollView>
 
           {/* Message Input */}
-          <View className="mt-3 flex-row items-center space-x-3">
-            <TextInput
-              value={newMessage}
-              onChangeText={setNewMessage}
-              placeholder="Type your message..."
-              className={`flex-1 rounded-2xl border border-gray-300 bg-white px-4 py-3 text-base ${
-                !isConnected ? 'bg-gray-100' : ''
-              }`}
-              multiline
-              onSubmitEditing={handleSendMessage}
-              returnKeyType="send"
-              editable={isConnected}
-            />
-            <TouchableOpacity
-              onPress={handleSendMessage}
-              disabled={!canSend}
-              className={`rounded-2xl px-6 py-3 ${
-                canSend ? 'bg-blue-500' : 'bg-gray-300'
-              } items-center justify-center`}>
-              <Text
-                className={`text-base font-semibold ${canSend ? 'text-white' : 'text-gray-500'}`}>
-                Send
-              </Text>
-            </TouchableOpacity>
+          <View className="border-t border-gray-200 bg-gray-50 p-3">
+            <View className="flex-row items-center space-x-3">
+              <TextInput
+                value={newMessage}
+                onChangeText={setNewMessage}
+                placeholder="Type your message..."
+                className={`flex-1 rounded-2xl border border-gray-300 bg-white px-4 py-3 text-base ${
+                  !isConnected ? 'bg-gray-100' : ''
+                }`}
+                multiline
+                onSubmitEditing={handleSendMessage}
+                returnKeyType="send"
+                editable={isConnected}
+              />
+              <TouchableOpacity
+                onPress={handleSendMessage}
+                disabled={!canSend}
+                className={`h-12 w-12 items-center justify-center rounded-full ${
+                  canSend ? 'bg-blue-500' : 'bg-gray-300'
+                }`}>
+                {/* Using an icon would be better here, but Text is fine for now */}
+                <Text className="text-xl">🚀</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </KeyboardAwareScrollView>
+        </View>
       </View>
     </SafeAreaView>
   );
