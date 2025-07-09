@@ -1,8 +1,9 @@
 import axios, { AxiosError, isAxiosError, InternalAxiosRequestConfig } from 'axios';
 import axiosRetry from 'axios-retry';
 import { useAuthStore } from '../store/authStore';
+import { env } from '~/config/env';
 
-const API_BASE_URL = 'https://57b1748f2c63.ngrok-free.app/api'; // Replace with your machine's IP
+const API_BASE_URL = `${env.API_URL}/api`; // Replace with your machine's IP
 // const API_BASE_URL = 'http://localhost:3000/api'; // Replace with your machine's IP
 
 // Simple axios instance for unauthenticated requests
