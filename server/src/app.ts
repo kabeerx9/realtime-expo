@@ -144,13 +144,51 @@ export const Main = async () => {
 
   // Socket.io chat handlers
   io.on("connection", (socket) => {
-    logging.info(`User connected: ${socket.id}`);
+    logging.info(`New client connected: ${socket.id}`);
 
-    // Send existing messages to newly connected user
-    logging.info(`[Socket] Emitting 'chat_history' to ${socket.id}`);
-    socket.emit("chat_history", chatMessages);
+    socket.on("find_or_create_room", () => {
+      const result = gameService.findOrCreateRoom(socket.id);
+      socket.join(result.roomId);
 
-    // Handle incoming messages
+      if (result.action === 'created') {
+        socket.emit("room_created", { roomId: result.roomId, players: result.players });
+        logging.info(`Player ${socket.id} created and joined room ${result.roomId}`);
+      } else if (result.action === 'joined') {
+        socket.emit("room_joined", { roomId: result.roomId, players: result.players });
+        logging.info(`Player ${socket.id} joined room ${result.roomId}`);
+
+        // The game is starting, notify both players with full context
+        const roomData = gameService.getRoomData(socket.id);
+        if (roomData && roomData.players.length === 2) {
+            logging.info(`[Game] Game starting in room ${roomData.id}`);
+            // The service starts the game internally, we just notify clients
+            roomData.players.forEach(playerId => {
+                io.to(playerId).emit("game_starting", {
+                    roomId: roomData.id,
+                    scores: roomData.scores,
+                    playerAssignments: roomData.playerAssignments
+                });
+            });
+        }
+      }
+    });
+
+    // Get current room status
+    socket.on("get_room_status", () => {
+      const roomData = gameService.getRoomData(socket.id);
+      if (roomData) {
+        socket.emit("room_status", roomData);
+      } else {
+        socket.emit("room_error", { success: false, error: "Not in a room" });
+      }
+    });
+
+    socket.on("disconnect", () => {
+      logging.info(`Client disconnected: ${socket.id}`);
+      gameService.leaveRoom(socket.id);
+    });
+
+    // Chat message
     socket.on("message", (data: { text: string; user: string }) => {
       // The server is now the source of truth for the message object
       const newMessage = {
@@ -185,83 +223,34 @@ export const Main = async () => {
 
     // ===== FANTASY GAME HANDLERS =====
 
-    // Create a new game room
-    socket.on("create_room", () => {
-      try {
-        const result = gameService.createRoom(socket.id);
-        socket.emit("room_created", {
-          success: true,
-          roomId: result.roomId,
-          players: result.players,
-          message: "Room created! Waiting for another player..."
-        });
-        logging.info(`Room ${result.roomId} created by ${socket.id}`);
-      } catch (error) {
-        socket.emit("room_error", { success: false, error: "Failed to create room" });
-      }
-    });
-
-    // Join a game room (auto-find available room or join specific room)
-    socket.on("join_room", (data: { roomId?: string } = {}) => {
-      try {
-        const result = gameService.joinRoom(socket.id, data.roomId);
-
-        if (result.success) {
-          socket.emit("room_joined", {
-            success: true,
-            roomId: result.roomId,
-            players: result.players,
-            message: "Joined room successfully!"
-          });
-
-            // Get room data to check if game should start
-          const roomData = gameService.getRoomData(socket.id);
-          if (roomData && roomData.players.length === 2 && roomData.gameStarted) {
-            // Notify both players that game is starting
-            roomData.players.forEach(playerId => {
-              io.to(playerId).emit("game_started", {
-                roomId: roomData.id,
-                playerCount: roomData.players.length,
-                message: "Game starting! Events will begin shortly..."
-              });
-            });
-          }
-
-          logging.info(`Player ${socket.id} joined room ${result.roomId}`);
-        } else {
-          socket.emit("room_error", {
-            success: false,
-            error: result.error || "Failed to join room"
-          });
-        }
-      } catch (error) {
-        socket.emit("room_error", { success: false, error: "Failed to join room" });
-      }
-    });
+    // Handle a player's click during a round - NOT NEEDED FOR THIS GAME
+    // socket.on("player_clicked", () => {
+    //   gameService.handlePlayerClick(socket.id, io);
+    // });
 
     // Get current room status
-    socket.on("get_room_status", () => {
-      const roomData = gameService.getRoomData(socket.id);
-      if (roomData) {
-        socket.emit("room_status", {
-          roomId: roomData.id,
-          playerCount: roomData.players.length,
-          gameStarted: roomData.gameStarted,
-          gameEnded: roomData.gameEnded,
-          currentScore: roomData.scores[socket.id] || 0,
-          events: roomData.events
-        });
-      } else {
-        socket.emit("room_status", { error: "Not in any room" });
-      }
-    });
+    // socket.on("get_room_status", () => {
+    //   const roomData = gameService.getRoomData(socket.id);
+    //   if (roomData) {
+    //     socket.emit("room_status", {
+    //       roomId: roomData.id,
+    //       playerCount: roomData.players.length,
+    //       gameStarted: roomData.gameStarted,
+    //       gameEnded: roomData.gameEnded,
+    //       currentScore: roomData.scores[socket.id] || 0,
+    //       events: roomData.events
+    //     });
+    //   } else {
+    //     socket.emit("room_status", { error: "Not in any room" });
+    //   }
+    // });
 
-    socket.on("disconnect", () => {
-      logging.info(`User disconnected: ${socket.id}`);
+    // socket.on("disconnect", () => {
+    //   logging.info(`User disconnected: ${socket.id}`);
 
-      // Handle game room cleanup
-      gameService.leaveRoom(socket.id);
-    });
+    //   // Handle game room cleanup
+    //   gameService.leaveRoom(socket.id);
+    // });
     });
 
   httpServer.listen(environment.port, () => {

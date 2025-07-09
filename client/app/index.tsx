@@ -26,6 +26,12 @@ export default function Index() {
         className="w-full rounded-lg bg-gray-200 p-4">
         <Text className="text-center text-xl font-semibold text-gray-700">View Todos</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => router.push('/game')}
+        className="mt-5 w-full rounded-lg bg-green-400 p-4">
+        <Text className="text-center text-xl font-semibold text-gray-700">Play Game</Text>
+      </TouchableOpacity>
     </View>
   );
 }

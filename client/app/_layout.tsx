@@ -114,6 +114,7 @@ export default function RootLayout() {
             <Stack.Screen name="details" />
             <Stack.Screen name="todos" />
             <Stack.Screen name="lobby" />
+            <Stack.Screen name="game" />
           </Stack>
           <Toast />
         </KeyboardProvider>

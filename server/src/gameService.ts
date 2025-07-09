@@ -68,7 +68,25 @@ class GameService {
     return GameService.instance;
   }
 
-  createRoom(socketId: string): { roomId: string; players: Player[] } {
+  findOrCreateRoom(socketId: string): { action: 'created' | 'joined'; roomId: string; players: Player[]; } {
+    const availableRoomId = this.findAvailableRoom();
+    if (availableRoomId) {
+      // Join existing room
+      const result = this.joinRoom(socketId, availableRoomId);
+      // This fallback is just for safety, in theory joinRoom should always succeed here.
+      if (!result.success || !result.roomId || !result.players) {
+        const { roomId, players } = this.createRoom(socketId);
+        return { action: 'created', roomId, players };
+      }
+      return { action: 'joined', roomId: result.roomId, players: result.players };
+    } else {
+      // Create new room
+      const { roomId, players } = this.createRoom(socketId);
+      return { action: 'created', roomId, players };
+    }
+  }
+
+  private createRoom(socketId: string): { roomId: string; players: Player[] } {
     const roomId = `room_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
     // Assign first 5 players to room creator
@@ -94,7 +112,7 @@ class GameService {
     return { roomId, players: assignedPlayers };
   }
 
-  joinRoom(socketId: string, roomId?: string): { success: boolean; roomId?: string; players?: Player[]; error?: string } {
+  private joinRoom(socketId: string, roomId?: string): { success: boolean; roomId?: string; players?: Player[]; error?: string } {
     // If no roomId provided, find available room
     if (!roomId) {
       roomId = this.findAvailableRoom();
@@ -253,24 +271,17 @@ class GameService {
     const room = this.rooms.get(roomId);
     if (!room) return;
 
+    // Determine winner
+    const winner = Object.entries(room.scores).sort((a, b) => b[1] - a[1])[0];
+
     // Import io here to avoid circular dependency
     const { io } = require('./app');
 
-    // Find winner
-    const winner = Object.entries(room.scores).reduce((a, b) =>
-      room.scores[a[0]] > room.scores[b[0]] ? a : b
-    );
-
     room.players.forEach(socketId => {
-      const opponentId = room.players.find(id => id !== socketId);
       io.to(socketId).emit("game_ended", {
+        message: "Game Over!",
         finalScores: room.scores,
-        allEvents: room.events,
-        winner: winner[0],
-        isWinner: winner[0] === socketId,
-        yourScore: room.scores[socketId] || 0,
-        opponentScore: opponentId ? (room.scores[opponentId] || 0) : 0,
-        message: "Game completed!"
+        winnerId: winner ? winner[0] : undefined
       });
     });
   }
@@ -298,35 +309,14 @@ class GameService {
   }
 
   private cleanupRoom(roomId: string): void {
-    const room = this.rooms.get(roomId);
-    if (!room) return;
-
-    // Clear any running timers
-    if (room.eventTimer) {
-      clearInterval(room.eventTimer);
-    }
-    if (room.gameTimer) {
-      clearTimeout(room.gameTimer);
-    }
-
-    // Remove all players from socketToRoom mapping
-    room.players.forEach(socketId => {
-      this.socketToRoom.delete(socketId);
-    });
-
-    // Delete the room
     this.rooms.delete(roomId);
-    console.log(`Room ${roomId} cleaned up`);
+    console.log(`Room ${roomId} cleaned up.`);
   }
 
   getRoomData(socketId: string): Room | null {
     const roomId = this.socketToRoom.get(socketId);
     if (!roomId) return null;
     return this.rooms.get(roomId) || null;
-  }
-
-  getAllRooms(): Room[] {
-    return Array.from(this.rooms.values());
   }
 }
 
