@@ -2,10 +2,8 @@ import axios, { AxiosError, isAxiosError, InternalAxiosRequestConfig } from 'axi
 import axiosRetry from 'axios-retry';
 import { useAuthStore } from '../store/authStore';
 
-// API Client configuration
-// For mobile/simulator: Use your machine's local IP instead of localhost
-// Find your IP: Run `ipconfig getifaddr en0` on Mac or `ipconfig` on Windows
-const API_BASE_URL = 'http://192.168.186.73:3000/api'; // Replace with your machine's IP
+const API_BASE_URL = 'https://57b1748f2c63.ngrok-free.app/api'; // Replace with your machine's IP
+// const API_BASE_URL = 'http://localhost:3000/api'; // Replace with your machine's IP
 
 // Simple axios instance for unauthenticated requests
 const authAxios = axios.create({

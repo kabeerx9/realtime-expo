@@ -1,183 +1,47 @@
 import { useCallback } from 'react';
 import { useChatStore, Message } from '../store/chatStore';
-import { useConnectionStore } from '../store/connectionStore';
 import { useAuthStore } from '../store/authStore';
-import websocketService from '../services/websocketService';
+import { useConnectionStore } from '../store/connectionStore';
 
-export interface UseChatOptions {
-  maxMessageLength?: number;
-}
+/**
+ * This hook provides a clean interface for UI components to interact with the chat system.
+ * It acts as a Facade, selecting state and actions from the underlying stores.
+ */
+export const useChat = () => {
+  // 1. Select state from stores
+  const messages = useChatStore((state) => state.messages);
+  const sendMessageAction = useChatStore((state) => state.sendMessage);
 
-export interface UseChatReturn {
-  // Messages
-  messages: Message[];
+  const isConnected = useConnectionStore((state) => state.isConnected);
+  const currentUser = useAuthStore((state) => state.user);
 
-  // Loading states
-  isLoadingHistory: boolean;
-  hasMoreHistory: boolean;
-
-  // Error state
-  chatError: string | null;
-
-  // Connection state
-  isConnected: boolean;
-
-  // Typing indicators
-  typingUsers: string[];
-
-  // Actions
-  sendMessage: (text: string) => void;
-  clearError: () => void;
-  loadMoreHistory: () => void;
-  startTyping: () => void;
-  stopTyping: () => void;
-
-  // Utilities
-  isMyMessage: (message: Message) => boolean;
-  getMessagesByUser: (user: string) => Message[];
-  getRecentMessages: (count: number) => Message[];
-  canSendMessage: (text: string) => boolean;
-  getMessageCount: () => number;
-}
-
-export const useChat = (options: UseChatOptions = {}): UseChatReturn => {
-  const { maxMessageLength = 500 } = options;
-
-  // Store subscriptions
-  const {
-    messages,
-    isLoadingHistory,
-    hasMoreHistory,
-    chatError,
-    typingUsers,
-    setChatError,
-    getMessagesByUser,
-    getRecentMessages,
-    getTotalMessageCount,
-    setLoadingHistory,
-  } = useChatStore();
-
-  const { isConnected } = useConnectionStore();
-  const { user } = useAuthStore();
-
-  // Validate if message can be sent
-  const canSendMessage = useCallback(
-    (text: string) => {
-      if (!text.trim()) {
-        return false;
-      }
-
-      if (text.length > maxMessageLength) {
-        setChatError(`Message too long. Maximum ${maxMessageLength} characters allowed.`);
-        return false;
-      }
-
-      if (!isConnected) {
-        setChatError('Not connected to chat server');
-        return false;
-      }
-
-      return true;
-    },
-    [maxMessageLength, isConnected, setChatError]
-  );
-
-  // Send message function
+  // 2. Define business logic and actions for the UI
   const sendMessage = useCallback(
     (text: string) => {
-      if (!canSendMessage(text)) {
+      if (!text.trim() || !isConnected) {
+        // In a real app, you might set an error state here
         return;
       }
-
-      if (!user) {
-        setChatError('User not authenticated');
-        return;
-      }
-
-      const messageData = {
-        text: text.trim(),
-        user: user.firstName,
-      };
-
-      websocketService.sendMessage(messageData);
+      sendMessageAction(text);
     },
-    [user, setChatError, canSendMessage]
+    [isConnected, sendMessageAction]
   );
 
-  // Clear error function
-  const clearError = useCallback(() => {
-    setChatError(null);
-  }, [setChatError]);
-
-  // Load more history function
-  const loadMoreHistory = useCallback(() => {
-    if (isLoadingHistory || !hasMoreHistory) {
-      return;
-    }
-
-    setLoadingHistory(true);
-
-    // Simulate loading history - in real app, this would be an API call
-    setTimeout(() => {
-      setLoadingHistory(false);
-      // For now, just indicate no more history
-      useChatStore.getState().setHasMoreHistory(false);
-    }, 1000);
-  }, [isLoadingHistory, hasMoreHistory, setLoadingHistory]);
-
-  // Check if message is from current user
   const isMyMessage = useCallback(
     (message: Message) => {
-      return message.user === user?.firstName;
+      // The server is the source of truth for the user,
+      // so we compare against the user info in the message payload.
+      // We check against the authenticated user in our auth store.
+      return message.user === currentUser?.firstName;
     },
-    [user]
+    [currentUser]
   );
 
-  // Get message count
-  const getMessageCount = useCallback(() => {
-    return getTotalMessageCount();
-  }, [getTotalMessageCount]);
-
-  // Typing functions
-  const startTyping = useCallback(() => {
-    if (!user) return;
-    websocketService.sendTyping(user.firstName);
-  }, [user]);
-
-  const stopTyping = useCallback(() => {
-    if (!user) return;
-    websocketService.sendStoppedTyping(user.firstName);
-  }, [user]);
-
+  // 3. Return the public API for the component
   return {
-    // Messages
     messages,
-
-    // Loading states
-    isLoadingHistory,
-    hasMoreHistory,
-
-    // Error state
-    chatError,
-
-    // Connection state
     isConnected,
-
-    // Typing indicators
-    typingUsers,
-
-    // Actions
     sendMessage,
-    clearError,
-    loadMoreHistory,
-    startTyping,
-    stopTyping,
-
-    // Utilities
     isMyMessage,
-    getMessagesByUser,
-    getRecentMessages,
-    canSendMessage,
-    getMessageCount,
   };
 };

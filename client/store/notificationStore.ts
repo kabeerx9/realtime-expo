@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
 
 export interface NotificationSettings {
   // Notification preferences
@@ -76,6 +77,11 @@ export interface NotificationState {
   getUnreadNotifications: () => PendingNotification[];
   getTotalUnreadCount: () => number;
   isMuted: () => boolean;
+  showToast: (
+    type: 'success' | 'error' | 'info' | 'warning',
+    title: string,
+    message?: string
+  ) => void;
 }
 
 const defaultSettings: NotificationSettings = {
@@ -282,6 +288,15 @@ export const useNotificationStore = create<NotificationState>()(
         const { settings } = get();
         if (!settings.muteUntil) return false;
         return new Date() < settings.muteUntil;
+      },
+
+      showToast: (type, title, message) => {
+        Toast.show({
+          type,
+          text1: title,
+          text2: message,
+          visibilityTime: get().settings.notificationTimeout,
+        });
       },
     }),
     {

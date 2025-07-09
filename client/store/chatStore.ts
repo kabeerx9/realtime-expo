@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { emitSocketEvent, subscribeToSocketEvent } from '~/services/socketService';
+import { useAuthStore } from '~/store/authStore';
+import { useNotificationStore } from './notificationStore';
 
 export interface Message {
   id: string;
@@ -10,151 +13,94 @@ export interface Message {
 }
 
 export interface ChatState {
-  // Messages
   messages: Message[];
-
-  // Chat settings
-  maxMessages: number;
-  maxMessageLength: number;
-
-  // Loading states
-  isLoadingHistory: boolean;
-  hasMoreHistory: boolean;
-
-  // Error state
-  chatError: string | null;
-
-  // Typing indicators
-  typingUsers: string[];
-
-  // Actions
   addMessage: (message: Message) => void;
-
-  // Chat history
-  setChatHistory: (messages: Message[]) => void;
-  prependHistoryMessages: (messages: Message[]) => void;
-  setLoadingHistory: (loading: boolean) => void;
-  setHasMoreHistory: (hasMore: boolean) => void;
-
-  // Error handling
-  setChatError: (error: string | null) => void;
+  setMessages: (messages: Message[]) => void;
+  sendMessage: (text: string) => void;
   clearChat: () => void;
-
-  // Typing indicators
-  addTypingUser: (user: string) => void;
-  removeTypingUser: (user: string) => void;
-  clearTypingUsers: () => void;
-
-  // Utilities
-  getMessagesByUser: (user: string) => Message[];
-  getRecentMessages: (count: number) => Message[];
-  getTotalMessageCount: () => number;
 }
 
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
-      // Initial state
       messages: [],
-      maxMessages: 100,
-      maxMessageLength: 500,
-      isLoadingHistory: false,
-      hasMoreHistory: true,
-      chatError: null,
-      typingUsers: [],
 
-      // Message actions
+      setMessages: (messages) => set({ messages }),
+
+      sendMessage: (text) => {
+        // Get the current user from the auth store
+        const user = useAuthStore.getState().user;
+        if (!user) {
+          console.error('Cannot send message, user not authenticated.');
+          return;
+        }
+
+        // Send the event with the user's name, like the old implementation
+        emitSocketEvent('message', { text, user: user.firstName });
+      },
+
       addMessage: (message) => {
         set((state) => {
-          // Check if message already exists to prevent duplicates
-          const existingMessage = state.messages.find((msg) => msg.id === message.id);
-          if (existingMessage) {
-            return state; // Don't add duplicate
+          // Prevent duplicates
+          if (state.messages.some((m) => m.id === message.id)) {
+            return state;
           }
-
+          // Add the new message
           const newMessages = [...state.messages, message];
-          // Keep only max messages
-          if (newMessages.length > state.maxMessages) {
-            newMessages.splice(0, newMessages.length - state.maxMessages);
+          // Optional: cap the number of messages to prevent memory issues
+          if (newMessages.length > 100) {
+            newMessages.splice(0, newMessages.length - 100);
           }
           return { messages: newMessages };
         });
       },
 
-      // Chat history
-      setChatHistory: (messages) => {
-        set({ messages: messages.slice(-get().maxMessages) });
-      },
-
-      prependHistoryMessages: (messages) => {
-        set((state) => ({
-          messages: [...messages, ...state.messages],
-        }));
-      },
-
-      setLoadingHistory: (loading) => {
-        set({ isLoadingHistory: loading });
-      },
-
-      setHasMoreHistory: (hasMore) => {
-        set({ hasMoreHistory: hasMore });
-      },
-
-      // Error handling
-      setChatError: (error) => {
-        set({ chatError: error });
-      },
-
       clearChat: () => {
-        set({
-          messages: [],
-          isLoadingHistory: false,
-          hasMoreHistory: true,
-          chatError: null,
-          typingUsers: [],
-        });
-      },
-
-      // Typing indicators
-      addTypingUser: (user) => {
-        set((state) => {
-          if (state.typingUsers.includes(user)) {
-            return state; // User already typing
-          }
-          return { typingUsers: [...state.typingUsers, user] };
-        });
-      },
-
-      removeTypingUser: (user) => {
-        set((state) => ({
-          typingUsers: state.typingUsers.filter((u) => u !== user),
-        }));
-      },
-
-      clearTypingUsers: () => {
-        set({ typingUsers: [] });
-      },
-
-      // Utilities
-      getMessagesByUser: (user) => {
-        return get().messages.filter((msg) => msg.user === user);
-      },
-
-      getRecentMessages: (count) => {
-        const messages = get().messages;
-        return messages.slice(-count);
-      },
-
-      getTotalMessageCount: () => {
-        return get().messages.length;
+        set({ messages: [] });
       },
     }),
     {
       name: 'chat-store',
       storage: createJSONStorage(() => AsyncStorage),
+      // Only persist the messages array
       partialize: (state) => ({
         messages: state.messages,
       }),
     }
   )
 );
+
+// --- Event Listener Initialization ---
+
+/**
+ * Subscribes to chat-related socket events and updates the chat store.
+ * @returns A cleanup function to unsubscribe from all listeners.
+ */
+export const initChatListeners = () => {
+  const unsubscribeMessage = subscribeToSocketEvent('message', (payload) => {
+    console.log('[Socket] Received message:', payload);
+
+    useChatStore.getState().addMessage({
+      ...payload,
+      timestamp: new Date(payload.timestamp),
+    });
+  });
+
+  const unsubscribeHistory = subscribeToSocketEvent('chat_history', (history) => {
+    console.log('[Socket] Received chat_history:', history);
+    const formattedHistory = history.map((msg) => ({
+      ...msg,
+      timestamp: new Date(msg.timestamp), // Convert string timestamp to Date object
+    }));
+    useChatStore.getState().setMessages(formattedHistory);
+  });
+
+  // When you add more events (e.g., typing), you subscribe here:
+  // const unsubscribeUserTyping = subscribeToSocketEvent('user_typing', ...);
+
+  return () => {
+    unsubscribeMessage();
+    unsubscribeHistory();
+    // unsubscribeUserTyping();
+  };
+};
