@@ -1,261 +1,272 @@
-# Realtime Expo App
+# Realtime Expo App - V2 Architecture
 
-A production-ready React Native Expo app with WebSocket-based realtime features, built with TypeScript and a layered architecture pattern.
+This document outlines a refined, professional-grade architecture for a scalable real-time application. It is designed to be modular, testable, and maintainable.
 
-## Realtime Architecture
+## The Three-Layer Decoupled Architecture
 
-This app implements a clean, scalable architecture pattern for realtime features using WebSockets. The architecture follows a layered approach that separates concerns and ensures maintainability.
+The core principle is a strict, unidirectional data flow built on three distinct layers. Each layer has a single responsibility and is designed to be unaware of the layers "above" it (e.g., the networking layer has no knowledge of the UI).
 
-### Architecture Layers
+```mermaid
+graph TD
+    A[UI Layer: React Components & Hooks] -->|Calls Store Actions| B(State Layer: Zustand Stores);
+    B -->|Emits Network Events| C(Infrastructure Layer: Socket Service);
+    C -->|Broadcasts Network Events| B;
 
-```
-UI Components → Custom Hooks → Zustand Stores → WebSocket Service
-```
+    subgraph "Presentation (What the user sees)"
+      A
+    end
 
-#### 1. **UI Components Layer**
-- React Native screens and components
-- Only concerned with rendering and user interactions
-- Uses custom hooks for all state management and business logic
+    subgraph "Business Logic & State (The app's brain)"
+      B
+    end
 
-#### 2. **Custom Hooks Layer**
-- React integration layer that bridges UI components with stores
-- Handles React-specific concerns (useEffect, component lifecycle)
-- Provides clean, reusable APIs for components
-- Examples: `useWebSocket`, `useChat`, `useNotifications`
-
-#### 3. **Zustand Stores Layer**
-- State management and business logic
-- Handles complex state updates and synchronization
-- Provides computed values and actions
-- Examples: `connectionStore`, `chatStore`, `notificationStore`
-
-#### 4. **WebSocket Service Layer**
-- Pure networking layer
-- Handles connection management, reconnection, and message routing
-- Integrates with stores for state updates
-- No UI concerns - only networking logic
-
-### Key Benefits
-
-- **Separation of Concerns**: Each layer has a single responsibility
-- **Testability**: Pure functions and isolated state management
-- **Scalability**: Easy to add new features without touching existing code
-- **Maintainability**: Clear data flow and predictable state updates
-- **Reusability**: Hooks and stores can be reused across components
-
-## Chat Example of this Architecture
-
-The chat feature demonstrates how all layers work together in a real-world scenario.
-
-### Data Flow Example
-
-When a user sends a message, here's the complete flow:
-
-```
-1. User types message in lobby.tsx
-2. Component calls sendMessage() from useChat hook
-3. useChat hook calls chatStore.sendMessage()
-4. chatStore calls websocketService.sendMessage()
-5. WebSocket sends message to server
-6. Server broadcasts to all connected clients
-7. WebSocket receives message and calls chatStore.addMessage()
-8. chatStore updates messages array
-9. Components re-render with new message
-10. If user is on different screen, toast notification shows
+    subgraph "Networking (The app's connection to the world)"
+      C
+    end
 ```
 
-### Implementation Details
+### 1. Infrastructure Layer (`services/socketService.ts`)
 
-#### 1. UI Component (`app/lobby.tsx`)
+-   **Responsibility**: Manage the raw WebSocket connection and nothing else. This layer is the foundation.
+-   **Key Characteristics**:
+    -   **Unaware**: Has no knowledge of Zustand, React, or any application-specific logic. It only knows how to connect and communicate.
+    -   **Stateless**: It does not hold any application state.
+    -   **Typed API**: Provides a clean, TypeScript-powered API (`connect`, `emit`, `subscribe`) for other parts of the app to use.
+
+### 2. State Layer (`store/*.ts`)
+
+-   **Responsibility**: Manage all application state and business logic. This is the "source of truth" for the entire application.
+-   **Key Characteristics**:
+    -   **Centralized**: Built with Zustand stores (e.g., `useChatStore`, `useConnectionStore`). All application data lives here.
+    -   **Reactive**: It **subscribes** to events from the Infrastructure Layer. When a message arrives from the server, the store catches the event and updates its own state.
+    -   **Action-Oriented**: Provides actions that the UI layer can call (e.g., `sendMessage`). If an action needs to talk to the server, it uses the Infrastructure Layer's API.
+
+### 3. UI Layer (`app/**/*.tsx`, `hooks/*.ts`)
+
+-   **Responsibility**: Render the UI and handle user interactions. This layer is all about what the user sees and does.
+-   **Key Characteristics**:
+    -   **Declarative**: React components read data directly from the State Layer (Zustand stores) and "react" to changes.
+    -   **Facade Hooks**: Custom hooks like `useChat` act as a **Facade**. They provide a clean, simplified API for components, hiding the complexity of which stores are being used. A component just calls `useChat()` to get everything it needs.
+    -   **Dumb**: This layer contains no complex business logic. When a user clicks a button, the UI layer simply calls an action from the State Layer.
+
+---
+
+## Full Code Implementation: A Simple Chat Feature
+
+Here is the final, working code for each layer, demonstrating the architecture in practice.
+
+### Step 1: Infrastructure Layer (`services/socketService.ts`)
+
 ```typescript
-// Only handles UI concerns
-const { isConnected, connectionError } = useWebSocket();
-const { messages, sendMessage, canSendMessage } = useChat();
-const { showToast } = useNotifications();
+import { io, Socket } from 'socket.io-client';
+import { env } from '~/config/env';
 
-const handleSendMessage = () => {
-  if (newMessage.trim() && canSendMessage(newMessage.trim())) {
-    sendMessage(newMessage.trim());
-    setNewMessage('');
-  }
+// Define event shapes for full-stack type safety.
+// Note: `timestamp` is a string because JSON does not have a Date type.
+export interface ServerToClientEvents {
+  message: (data: { id: string; user: string; text: string; timestamp: string }) => void;
+  chat_history: (data: Array<{ id:string; user: string; text: string; timestamp: string }>) => void;
+}
+
+export interface ClientToServerEvents {
+  message: (data: { text: string; user: string }) => void;
+}
+
+const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(env.API_URL, {
+  autoConnect: false,
+});
+
+// --- Public API ---
+export const connectSocket = () => socket.connect();
+export const disconnectSocket = () => socket.disconnect();
+
+export const emitSocketEvent = <Event extends keyof ClientToServerEvents>(
+  event: Event,
+  ...args: Parameters<ClientToServerEvents[Event]>
+) => {
+  socket.emit(event, ...args);
+};
+
+export const subscribeToSocketEvent = <Event extends keyof ServerToClientEvents>(
+  event: Event,
+  callback: ServerToClientEvents[Event]
+) => {
+  socket.on(event, callback as any);
+  return () => socket.off(event, callback as any);
+};
+
+export const socketConnectionEvents = {
+  onConnect: (callback: () => void) => socket.on('connect', callback),
+  onDisconnect: (callback: () => void) => socket.on('disconnect', callback),
+  onConnectError: (callback: (err: Error) => void) => socket.on('connect_error', callback),
 };
 ```
 
-#### 2. Custom Hooks (`hooks/useChat.ts`)
+### Step 2: State Layer (`store/chatStore.ts`)
+
 ```typescript
-// React integration layer
-export const useChat = () => {
-  const chatStore = useChatStore();
-  const authStore = useAuthStore();
+import { create } from 'zustand';
+import { emitSocketEvent, subscribeToSocketEvent } from '~/services/socketService';
+import { useAuthStore } from '~/store/authStore';
 
-  const sendMessage = useCallback((text: string) => {
-    const user = authStore.user?.firstName;
-    if (user) {
-      chatStore.sendMessage(text, user);
-    }
-  }, [chatStore, authStore]);
+export interface Message {
+  id: string;
+  user: string;
+  text: string;
+  timestamp: Date; // We store timestamps as Date objects in the client
+}
 
-  return {
-    messages: chatStore.messages,
-    sendMessage,
-    canSendMessage: chatStore.canSendMessage,
-    // ... other methods
+interface ChatState {
+  messages: Message[];
+  sendMessage: (text: string) => void;
+  addMessage: (message: Message) => void;
+  setMessages: (messages: Message[]) => void;
+}
+
+export const useChatStore = create<ChatState>((set) => ({
+  messages: [],
+  setMessages: (messages) => set({ messages }),
+  addMessage: (message) => {
+    set((state) => ({ messages: [...state.messages, message] }));
+  },
+  sendMessage: (text) => {
+    const user = useAuthStore.getState().user;
+    if (!user) return;
+    emitSocketEvent('message', { text, user: user.firstName });
+  },
+}));
+
+// This function initializes listeners and should be called once on app start.
+export const initChatListeners = () => {
+  const unsubHistory = subscribeToSocketEvent('chat_history', (history) => {
+    const formatted = history.map((msg) => ({ ...msg, timestamp: new Date(msg.timestamp) }));
+    useChatStore.getState().setMessages(formatted);
+  });
+
+  const unsubMessage = subscribeToSocketEvent('message', (payload) => {
+    const message = { ...payload, timestamp: new Date(payload.timestamp) };
+    useChatStore.getState().addMessage(message);
+  });
+
+  return () => {
+    unsubHistory();
+    unsubMessage();
   };
 };
 ```
 
-#### 3. Zustand Store (`store/chatStore.ts`)
+### Step 3: UI Layer - The Hook (`hooks/useChat.ts`)
+
 ```typescript
-// Business logic and state management
-export const useChatStore = create<ChatState>((set, get) => ({
-  messages: [],
+import { useChatStore, Message } from '~/store/chatStore';
+import { useAuthStore } from '~/store/authStore';
+import { useConnectionStore } from '~/store/connectionStore';
 
-  sendMessage: (text: string, user: string) => {
-    const message: Message = {
-      id: Date.now().toString(),
-      text,
-      user,
-      timestamp: new Date(),
-    };
+export const useChat = () => {
+  const messages = useChatStore((state) => state.messages);
+  const sendMessage = useChatStore((state) => state.sendMessage);
 
-    // Send via WebSocket service
-    websocketService.sendMessage({ text, user });
-  },
+  const isConnected = useConnectionStore((state) => state.isConnected);
+  const currentUser = useAuthStore((state) => state.user);
 
-  addMessage: (message: Message) => {
-    set((state) => {
-      // Prevent duplicates
-      if (state.messages.some(m => m.id === message.id)) {
-        return state;
-      }
-      return {
-        messages: [...state.messages, message]
+  const isMyMessage = (message: Message) => {
+    return message.user === currentUser?.firstName;
+  };
+
+  return { messages, isConnected, sendMessage, isMyMessage };
+};
+```
+
+### Step 4: UI Layer - The Component (`app/lobby.tsx`)
+
+```typescript
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { useChat } from '~/hooks/useChat';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+export default function Lobby() {
+  const [newMessage, setNewMessage] = useState('');
+  const scrollViewRef = useRef<ScrollView>(null);
+  const { messages, isConnected, sendMessage, isMyMessage } = useChat();
+
+  useEffect(() => {
+    setTimeout(() => scrollViewRef.current?.scrollToEnd(), 100);
+  }, [messages]);
+
+  const handleSend = () => {
+    if (newMessage.trim() && isConnected) {
+      sendMessage(newMessage.trim());
+      setNewMessage('');
+    }
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-white">
+      {/* ... Connection status and other UI ... */}
+      <View className="flex-1 rounded-lg border border-gray-200 bg-gray-50">
+        <KeyboardAwareScrollView ref={scrollViewRef} className="flex-1 p-4">
+          {messages.length === 0 ? (
+            <Text>No messages yet.</Text>
+          ) : (
+            messages.map((message) => {
+              const isMine = isMyMessage(message);
+              return (
+                <View key={message.id} className={`mb-4 ${isMine ? 'items-end' : 'items-start'}`}>
+                  {/* ... Message bubble JSX ... */}
+                </View>
+              );
+            })
+          )}
+        </KeyboardAwareScrollView>
+        {/* ... Message input JSX ... */}
+      </View>
+    </SafeAreaView>
+  );
+}
+```
+
+### Step 5: Initialization (`app/_layout.tsx`)
+
+```typescript
+import { useEffect } from 'react';
+import { useAuthStore } from '~/store/authStore';
+import { connectSocket, disconnectSocket } from '~/services/socketService';
+import { initConnectionListeners } from '~/store/connectionStore';
+import { initChatListeners } from '~/store/chatStore';
+import { useChatNotifications } from '~/hooks/useChatNotifications';
+
+function SocketManager() {
+  const { isAuthenticated } = useAuthStore();
+  useEffect(() => {
+    if (isAuthenticated) {
+      connectSocket();
+      const cleanupChat = initChatListeners();
+      const cleanupConnection = initConnectionListeners();
+      return () => {
+        cleanupChat();
+        cleanupConnection();
+        disconnectSocket();
       };
-    });
-  },
-}));
-```
-
-#### 4. WebSocket Service (`services/websocketService.ts`)
-```typescript
-// Pure networking layer
-class WebSocketService {
-  setupEventListeners() {
-    this.socket.on('message', (message: Message) => {
-      // Update chat store
-      chatStore.addMessage(message);
-
-      // Handle notifications
-      this.handleMessageNotification(message);
-    });
-  }
-
-  sendMessage(messageData: { text: string; user: string }) {
-    if (this.socket && connectionStore.isConnected) {
-      this.socket.emit('message', messageData);
     }
-  }
+  }, [isAuthenticated]);
+  return null;
+}
 
-  private handleMessageNotification(message: Message) {
-    // Check if should show notification
-    if (notificationStore.shouldShowNotification('chat', message.user)) {
-      notificationStore.addNotification({
-        type: 'chat',
-        title: `New message from ${message.user}`,
-        message: message.text,
-      });
-    }
-  }
+function NotificationManager() {
+  useChatNotifications();
+  return null;
+}
+
+export default function RootLayout() {
+  return (
+    {/* ... Providers ... */}
+      <SocketManager />
+      <NotificationManager />
+      <RouteManager />
+      <Stack>{/* ... Screens ... */}</Stack>
+    {/* ... */}
+  );
 }
 ```
-
-### Advanced Features
-
-#### 1. **Automatic Reconnection**
-```typescript
-// connectionStore.ts - Exponential backoff strategy
-const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-```
-
-#### 2. **Route-Aware Notifications**
-```typescript
-// notificationStore.ts - Only show toasts when not on chat screen
-shouldShowNotification: (type, user) => {
-  if (type === 'chat' && currentRoute === '/lobby') return false;
-  return true;
-}
-```
-
-#### 3. **Duplicate Message Prevention**
-```typescript
-// chatStore.ts - Prevent duplicate messages
-addMessage: (message: Message) => {
-  if (state.messages.some(m => m.id === message.id)) {
-    return state; // Don't add duplicate
-  }
-  return { messages: [...state.messages, message] };
-}
-```
-
-#### 4. **Persistent State**
-```typescript
-// All stores use AsyncStorage for persistence
-export const useConnectionStore = create<ConnectionState>()(
-  persist(
-    (set, get) => ({
-      // ... store implementation
-    }),
-    {
-      name: 'connection-store',
-      storage: createJSONStorage(() => AsyncStorage),
-    }
-  )
-);
-```
-
-### Store Responsibilities
-
-| Store | Purpose | Key Features |
-|-------|---------|-------------|
-| `connectionStore` | WebSocket connection state | Auto-reconnect, server URL, connection status |
-| `chatStore` | Chat messages and logic | Message history, duplicate prevention, user identification |
-| `notificationStore` | Toast notifications | Route awareness, unread counts, muting, settings |
-| `authStore` | Authentication state | User info, login/logout, token management |
-
-### Hook Responsibilities
-
-| Hook | Purpose | Returns |
-|------|---------|---------|
-| `useWebSocket` | Connection management | `isConnected`, `connect`, `disconnect`, `reconnect` |
-| `useChat` | Chat functionality | `messages`, `sendMessage`, `canSendMessage`, `isMyMessage` |
-| `useNotifications` | Toast management | `showToast`, `unreadCounts`, `muteUser` |
-
-### Adding New Features
-
-To add a new realtime feature (e.g., user typing indicators):
-
-1. **Add to Store**: Define state and actions in relevant store
-2. **Update Service**: Add WebSocket event handlers
-3. **Create Hook**: Add React integration layer
-4. **Update UI**: Use hook in components
-
-Example:
-```typescript
-// 1. Add to chatStore
-typingUsers: string[],
-setTypingUsers: (users: string[]) => set({ typingUsers: users }),
-
-// 2. Update websocketService
-this.socket.on('user_typing', (users) => {
-  chatStore.setTypingUsers(users);
-});
-
-// 3. Add to useChat hook
-const typingUsers = chatStore.typingUsers;
-return { typingUsers, /* ... */ };
-
-// 4. Use in component
-const { typingUsers } = useChat();
-```
-
-This architecture scales beautifully as your app grows, maintaining clean separation of concerns and making it easy to add complex realtime features.

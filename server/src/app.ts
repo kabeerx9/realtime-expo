@@ -22,6 +22,7 @@ import { RequestWithUser } from "./types/request";
 import routes from "./routes";
 import { Server } from "socket.io";
 import gameService from "./gameService";
+import { randomUUID } from "crypto";
 
 export const app = express();
 export let httpServer: ReturnType<typeof http.createServer>;
@@ -146,22 +147,27 @@ export const Main = async () => {
     logging.info(`User connected: ${socket.id}`);
 
     // Send existing messages to newly connected user
+    logging.info(`[Socket] Emitting 'chat_history' to ${socket.id}`);
     socket.emit("chat_history", chatMessages);
 
     // Handle incoming messages
-    socket.on("message", (message: {
-      id: string;
-      text: string;
-      user: string;
-      timestamp: Date;
-    }) => {
-      logging.info(`Message from ${message.user}: ${message.text}`);
+    socket.on("message", (data: { text: string; user: string }) => {
+      // The server is now the source of truth for the message object
+      const newMessage = {
+        id: randomUUID(), // Generate a unique ID on the server
+        text: data.text,
+        user: data.user,
+        timestamp: new Date(), // Use the server's timestamp
+      };
 
-      // Store message in memory
-      chatMessages.push(message);
+      logging.info(`Message from ${newMessage.user}: ${newMessage.text}`);
 
-      // Broadcast message to all connected clients
-      io.emit("message", message);
+      // Store the complete message object
+      chatMessages.push(newMessage);
+
+      // Broadcast the complete message object to all connected clients
+      logging.info(`[Socket] Broadcasting 'message' to all clients`);
+      io.emit("message", newMessage);
     });
 
     // Handle typing indicators
