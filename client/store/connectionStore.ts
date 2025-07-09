@@ -8,6 +8,7 @@ export interface ConnectionState {
   isConnecting: boolean; // Keep for UI feedback before first connect
   lastConnected: Date | null;
   connectionError: string | null;
+  socketId: string | null;
 
   // We are removing most actions, as the socket service will now drive state changes.
   // We'll keep one for the UI to trigger the initial connection process.
@@ -22,6 +23,7 @@ export const useConnectionStore = create<ConnectionState>()(
       isConnecting: false,
       lastConnected: null,
       connectionError: null,
+      socketId: null,
 
       setConnecting: (isConnecting) => set({ isConnecting }),
     }),
@@ -49,6 +51,7 @@ export const initConnectionListeners = () => {
       isConnecting: false,
       connectionError: null,
       lastConnected: new Date(),
+      socketId: socketConnectionEvents.getSocketId(),
     });
   };
 
@@ -56,6 +59,7 @@ export const initConnectionListeners = () => {
     useConnectionStore.setState({
       isConnected: false,
       isConnecting: false,
+      socketId: null,
       // We could set a generic error here if we want
       // connectionError: 'Disconnected',
     });

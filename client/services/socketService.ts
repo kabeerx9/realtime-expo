@@ -135,4 +135,5 @@ export const socketConnectionEvents = {
   onConnect: (callback: () => void) => socket.on('connect', callback),
   onDisconnect: (callback: () => void) => socket.on('disconnect', callback),
   onConnectError: (callback: (err: Error) => void) => socket.on('connect_error', callback),
+  getSocketId: () => socket.id,
 };
