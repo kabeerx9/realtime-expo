@@ -1,6 +1,71 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useNotificationStore } from '~/store/notificationStore';
+import { useGame } from '~/hooks/game/useGame';
+
+const GameButton = () => {
+  const router = useRouter();
+  const { status, myScore, opponentScore, winnerId, myId } = useGame();
+
+  const navigateToGame = () => router.push('/game');
+
+  console.log('status', status);
+
+  switch (status) {
+    case 'waiting':
+      return (
+        <TouchableOpacity
+          onPress={navigateToGame}
+          className="mt-5 w-full rounded-lg border border-blue-400 bg-blue-100 p-4">
+          <Text className="text-center text-xl font-semibold text-blue-800">
+            Waiting for Opponent...
+          </Text>
+          <Text className="text-center text-sm text-blue-700">Click to enter the room</Text>
+        </TouchableOpacity>
+      );
+
+    case 'active':
+      return (
+        <TouchableOpacity
+          onPress={navigateToGame}
+          className="mt-5 w-full rounded-lg border border-yellow-400 bg-yellow-100 p-4">
+          <Text className="text-center text-xl font-semibold text-yellow-800">
+            Game in Progress!
+          </Text>
+          <Text className="text-center text-base font-medium text-yellow-700">
+            You: {myScore} | Opponent: {opponentScore}
+          </Text>
+        </TouchableOpacity>
+      );
+
+    case 'finished':
+      const youWon = winnerId === myId;
+      return (
+        <TouchableOpacity
+          onPress={navigateToGame}
+          className={`mt-5 w-full rounded-lg p-4 ${
+            youWon ? 'border border-green-400 bg-green-100' : 'border border-red-400 bg-red-100'
+          }`}>
+          <Text className="text-center text-xl font-semibold text-gray-800">Game Finished!</Text>
+          <Text
+            className={`text-center text-base font-medium ${
+              youWon ? 'text-green-800' : 'text-red-800'
+            }`}>
+            {youWon ? 'You Won!' : 'You Lost'} (Final: {myScore} - {opponentScore})
+          </Text>
+        </TouchableOpacity>
+      );
+
+    default: // 'idle'
+      return (
+        <TouchableOpacity
+          onPress={navigateToGame}
+          className="mt-5 w-full rounded-lg bg-green-500 p-4 shadow-md">
+          <Text className="text-center text-xl font-semibold text-white">Play Game</Text>
+        </TouchableOpacity>
+      );
+  }
+};
 
 export default function Index() {
   const router = useRouter();
@@ -27,11 +92,7 @@ export default function Index() {
         <Text className="text-center text-xl font-semibold text-gray-700">View Todos</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={() => router.push('/game')}
-        className="mt-5 w-full rounded-lg bg-green-400 p-4">
-        <Text className="text-center text-xl font-semibold text-gray-700">Play Game</Text>
-      </TouchableOpacity>
+      <GameButton />
     </View>
   );
 }

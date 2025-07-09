@@ -31,6 +31,8 @@ interface GameState {
 
   // actions
   findGame: () => void;
+  leaveGame: () => void;
+  syncGameState: () => void;
   // Internal setters called by listeners
   _handleRoomCreated: (data: { roomId: string; players: Player[] }) => void;
   _handleRoomJoined: (data: { roomId: string; players: Player[] }) => void;
@@ -52,6 +54,15 @@ interface GameState {
     finalScores: { [socketId: string]: number };
     winnerId?: string;
   }) => void;
+  _handleFullStateSync: (data: {
+    players: string[]; // This is an array of socket IDs
+    gameEnded: boolean;
+    gameStarted: boolean;
+    playerAssignments: { [socketId: string]: Player[] };
+    scores: { [socketId: string]: number };
+    events: GameEvent[];
+    winnerId?: string;
+  }) => void;
   _reset: () => void;
 }
 
@@ -69,6 +80,21 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   findGame: () => {
     emitSocketEvent('find_or_create_room');
+  },
+  leaveGame: () => {
+    emitSocketEvent('leave_room');
+    set({
+      status: 'idle',
+      myPlayers: [],
+      opponentPlayers: [],
+      myScore: 0,
+      opponentScore: 0,
+      events: [],
+      winnerId: null,
+    }); // Immediately reset the client state
+  },
+  syncGameState: () => {
+    emitSocketEvent('get_room_status');
   },
   _handleRoomCreated: (data) => {
     set({ status: 'waiting', myPlayers: data.players });
@@ -101,9 +127,34 @@ export const useGameStore = create<GameState>((set, get) => ({
     }));
   },
   _handleGameEnded: (data) => {
+    console.log('[GameStore] Received game_ended event:', data);
     set({
       status: 'finished',
       winnerId: data.winnerId,
+    });
+  },
+  _handleFullStateSync: (data: {
+    players: string[]; // This is an array of socket IDs
+    gameEnded: boolean;
+    gameStarted: boolean;
+    playerAssignments: { [socketId: string]: Player[] };
+    scores: { [socketId: string]: number };
+    events: GameEvent[];
+    winnerId?: string;
+  }) => {
+    const mySocketId = useConnectionStore.getState().socketId;
+    if (!mySocketId) return;
+
+    const opponentSocketId = data.players.find((id) => id !== mySocketId);
+
+    set({
+      status: data.gameEnded ? 'finished' : data.gameStarted ? 'active' : 'waiting',
+      myPlayers: data.playerAssignments[mySocketId] || [],
+      opponentPlayers: opponentSocketId ? data.playerAssignments[opponentSocketId] : [],
+      myScore: data.scores[mySocketId] || 0,
+      opponentScore: opponentSocketId ? data.scores[opponentSocketId] : 0,
+      events: data.events || [],
+      winnerId: data.gameEnded ? data.winnerId : null,
     });
   },
   _reset: () => {
@@ -135,6 +186,9 @@ export const initGameListeners = () => {
   const unsubscribeGameEnded = subscribeToSocketEvent('game_ended', (data) => {
     useGameStore.getState()._handleGameEnded(data);
   });
+  const unsubscribeFullStateSync = subscribeToSocketEvent('room_status', (data) => {
+    useGameStore.getState()._handleFullStateSync(data);
+  });
 
   return () => {
     unsubscribeRoomCreated();
@@ -142,5 +196,6 @@ export const initGameListeners = () => {
     unsubscribeGameStarting();
     unsubscribeGameEvent();
     unsubscribeGameEnded();
+    unsubscribeFullStateSync();
   };
 };

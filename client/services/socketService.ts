@@ -54,6 +54,8 @@ export interface ServerToClientEvents {
     finalScores: { [socketId: string]: number };
     winnerId?: string;
   }) => void;
+
+  room_status: (data: any) => void; // Using 'any' for now, will be properly typed in the store
 }
 
 export interface ClientToServerEvents {
@@ -62,6 +64,8 @@ export interface ClientToServerEvents {
   // ---------- Game Events ---------- //
 
   find_or_create_room: () => void;
+  leave_room: () => void;
+  get_room_status: () => void;
 }
 
 // --------------------------------------------------------------------------------

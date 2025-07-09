@@ -11,6 +11,7 @@ import { useAuthStore } from '~/store/authStore';
 import { connectSocket, disconnectSocket } from '~/services/socketService';
 import { initConnectionListeners } from '~/store/connectionStore';
 import { initChatListeners } from '~/store/chatStore';
+import { initGameListeners } from '~/store/game/gameStore';
 import { useChatNotifications } from '~/hooks/useChatNotifications';
 
 const queryClient = new QueryClient({
@@ -35,14 +36,14 @@ function SocketManager() {
       connectSocket();
       const cleanupConnection = initConnectionListeners();
       const cleanupChat = initChatListeners();
-      // const cleanupGame = initGameListeners(); // etc.
+      const cleanupGame = initGameListeners();
 
       return () => {
         console.log('User logged out, disconnecting socket...');
         // Disconnect and clean up all listeners
         cleanupConnection();
         cleanupChat();
-        // cleanupGame();
+        cleanupGame();
         disconnectSocket();
       };
     }
