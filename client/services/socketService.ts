@@ -2,6 +2,22 @@ import { io, Socket } from 'socket.io-client';
 import { env } from '~/config/env';
 import { useAuthStore } from '~/store/authStore';
 
+// Game Events types
+interface Player {
+  id: string;
+  name: string;
+  position: string;
+  baseSkill: number;
+}
+interface GameEvent {
+  id: string;
+  playerId: string;
+  playerName: string;
+  action: string;
+  pointsChange: number;
+  timestamp: Date;
+}
+
 // --------------------------------------------------------------------------------
 // 1. EVENT TYPES
 // Define all client-server events here for full-stack type safety.
@@ -13,12 +29,39 @@ export interface ServerToClientEvents {
   chat_history: (
     data: Array<{ id: string; user: string; text: string; timestamp: string }>
   ) => void;
-  // Example of another event
-  // user_typing: (data: { user: string }) => void;
+
+  // ---------- Game Events ---------- //
+
+  room_created: (data: { roomId: string; players: Player[] }) => void;
+  room_joined: (data: { roomId: string; players: Player[] }) => void;
+  game_starting: (data: {
+    roomId: string;
+    scores: { [socketId: string]: number };
+    playerAssignments: { [socketId: string]: Player[] };
+  }) => void;
+
+  game_event: (data: {
+    event: GameEvent;
+    currentScore: number;
+    opponentScore: number;
+    allScores: { [socketId: string]: number };
+    gameEnded: boolean;
+    isMyPlayer: boolean;
+  }) => void;
+
+  game_ended: (data: {
+    message: string;
+    finalScores: { [socketId: string]: number };
+    winnerId?: string;
+  }) => void;
 }
 
 export interface ClientToServerEvents {
   message: (data: { text: string; user: string }) => void;
+
+  // ---------- Game Events ---------- //
+
+  find_or_create_room: () => void;
 }
 
 // --------------------------------------------------------------------------------
