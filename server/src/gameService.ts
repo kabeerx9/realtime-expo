@@ -25,6 +25,7 @@ interface Room {
   gameTimer: NodeJS.Timeout | null;
   eventTimer: NodeJS.Timeout | null;
   createdAt: Date;
+  winnerId?: string;
 }
 
 // Hardcoded 10 fantasy players
@@ -145,11 +146,6 @@ class GameService {
 
     console.log(`Player ${socketId} joined room ${roomId}`);
 
-    // If room is full, start the game
-    if (room.players.length === 2) {
-      this.startGame(roomId);
-    }
-
     return { success: true, roomId, players: assignedPlayers };
   }
 
@@ -162,7 +158,7 @@ class GameService {
     return undefined;
   }
 
-  private startGame(roomId: string): void {
+  startGame(roomId: string): void {
     const room = this.rooms.get(roomId);
     if (!room || room.gameStarted) return;
 
@@ -250,6 +246,22 @@ class GameService {
 
     room.gameEnded = true;
 
+    // --- Calculate and store the winner on the room object ---
+    const playerIds = Object.keys(room.scores);
+    if (playerIds.length === 1) {
+      room.winnerId = playerIds[0];
+    } else if (playerIds.length === 2) {
+      const playerA = playerIds[0];
+      const playerB = playerIds[1];
+      if (room.scores[playerA] > room.scores[playerB]) {
+        room.winnerId = playerA;
+      } else if (room.scores[playerB] > room.scores[playerA]) {
+        room.winnerId = playerB;
+      }
+      // If scores are equal, room.winnerId remains undefined.
+    }
+    // ---
+
     // Clear timers
     if (room.eventTimer) {
       clearInterval(room.eventTimer);
@@ -271,17 +283,19 @@ class GameService {
     const room = this.rooms.get(roomId);
     if (!room) return;
 
-    // Determine winner
-    const winner = Object.entries(room.scores).sort((a, b) => b[1] - a[1])[0];
+    // The winner is now part of the canonical room state.
+    const { winnerId, scores } = room;
+
+    console.log(`[Game End] Broadcasting end for room ${roomId}. Winner: ${winnerId || 'Tie'}. Scores:`, scores);
 
     // Import io here to avoid circular dependency
     const { io } = require('./app');
 
-    room.players.forEach(socketId => {
-      io.to(socketId).emit("game_ended", {
-        message: "Game Over!",
-        finalScores: room.scores,
-        winnerId: winner ? winner[0] : undefined
+    room.players.forEach((socketId) => {
+      io.to(socketId).emit('game_ended', {
+        message: 'Game Over!',
+        finalScores: scores,
+        winnerId: winnerId,
       });
     });
   }
@@ -303,12 +317,28 @@ class GameService {
     console.log(`Player ${socketId} left room ${roomId}`);
 
     // If room is empty or game was in progress, clean up
-    if (room.players.length === 0 || room.gameStarted) {
+    if (room.players.length === 0) {
       this.cleanupRoom(roomId);
     }
   }
 
   private cleanupRoom(roomId: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+
+    // Clear any residual timers before deleting
+    if (room.eventTimer) {
+      clearInterval(room.eventTimer);
+    }
+    if (room.gameTimer) {
+      clearTimeout(room.gameTimer);
+    }
+
+    // Remove all players from the lookup map
+    room.players.forEach(socketId => {
+      this.socketToRoom.delete(socketId);
+    });
+
     this.rooms.delete(roomId);
     console.log(`Room ${roomId} cleaned up.`);
   }

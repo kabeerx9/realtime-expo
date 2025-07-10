@@ -160,8 +160,11 @@ export const Main = async () => {
         // The game is starting, notify both players with full context
         const roomData = gameService.getRoomData(socket.id);
         if (roomData && roomData.players.length === 2) {
-            logging.info(`[Game] Game starting in room ${roomData.id}`);
-            // The service starts the game internally, we just notify clients
+            logging.info(`[Game] Starting game in room ${roomData.id}`);
+            // Explicitly start the game in the service
+            gameService.startGame(roomData.id);
+
+            // Notify clients that the game is starting
             roomData.players.forEach(playerId => {
                 io.to(playerId).emit("game_starting", {
                     roomId: roomData.id,
@@ -181,6 +184,11 @@ export const Main = async () => {
       } else {
         socket.emit("room_error", { success: false, error: "Not in a room" });
       }
+    });
+
+    socket.on("leave_room", () => {
+      logging.info(`Client ${socket.id} is leaving their room.`);
+      gameService.leaveRoom(socket.id);
     });
 
     socket.on("disconnect", () => {
